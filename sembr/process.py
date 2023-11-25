@@ -1,21 +1,6 @@
 import re
-from dataclasses import dataclass
 
 from transformers import AutoTokenizer, DataCollatorForTokenClassification
-
-
-LABELS = ['off', 'space', 'nospace', 'comment']
-id2label = {i: l for i, l in enumerate(LABELS)}
-label2id = {l: i for i, l in enumerate(LABELS)}
-
-
-@dataclass
-class LabelAttr:
-    mode: str = True
-    indent: int = 0
-
-    def __str__(self):
-        return f'<{self.mode}-{self.indent}>'
 
 
 class SemBrProcessor(object):

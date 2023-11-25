@@ -8,7 +8,7 @@ from .process import SemBrProcessor
 
 logger = datasets.logging.get_logger(__name__)
 
-MAX_INDENT = 4
+MAX_INDENT = 3
 
 
 class SemBr2023(datasets.GeneratorBasedBuilder):
