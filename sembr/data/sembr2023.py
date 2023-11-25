@@ -1,13 +1,14 @@
-import re
 import os
 import glob
 
 import datasets
 
-from .process import SemBrProcessor, SemBrTokenizer, MAX_INDENT
+from .process import SemBrProcessor
 
 
 logger = datasets.logging.get_logger(__name__)
+
+MAX_INDENT = 10
 
 
 class SemBr2023(datasets.GeneratorBasedBuilder):
@@ -21,11 +22,10 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.tokenizer = SemBrTokenizer()
-        self.processor = SemBrProcessor(self.tokenizer)
+        self.processor = SemBrProcessor()
 
     def _info(self):
-        modes = ['off', 'space', 'nospace', 'comment']
+        modes = ['off', 'space', 'nospace']
         indents = [str(i) for i in range(MAX_INDENT)]
         labels = ['off'] + [f'{m}-{i}' for m in modes for i in indents]
         return datasets.DatasetInfo(

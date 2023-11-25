@@ -1,10 +1,10 @@
 import re
+from collections import Counter
 from dataclasses import dataclass
 
 from transformers import AutoTokenizer, DataCollatorForTokenClassification
 
 
-MAX_INDENT = 10
 LABELS = ['off', 'space', 'nospace', 'comment']
 id2label = {i: l for i, l in enumerate(LABELS)}
 label2id = {l: i for i, l in enumerate(LABELS)}
@@ -19,173 +19,257 @@ class LabelAttr:
         return f'<{self.mode}-{self.indent}>'
 
 
-class TokenFSM(object):
-    states = ['space', 'nospace', 'normal', 'comment']
-
-    def __init__(self):
-        super().__init__()
-        self.indent = 0
-        self.state = 'space'
-
-    @property
-    def trail_space(self):
-        return self.state == 'space'
-
-    @property
-    def in_comment(self):
-        return self.state == 'comment'
-
-    def transition(self, token):
-        match (token, self.state):
-            case ('[CLS]' | '[SEP]'), _:
-                return False, None
-            case ('[indent]', 'normal') | ('[indent]', 'comment'):
-                return False, None
-            case ('[indent]', 'space') | ('[indent]', 'nospace'):
-                self.indent += 1
-                return False, None
-            case ('[newline]', 'space') | ('[newline]', 'nospace'):
-                self.state = 'space'
-                self.indent = 0
-                return False, None
-            case '[newline]', _:
-                if self.state == 'normal':
-                    self.state = 'space'
-                elif self.state == 'comment':
-                    self.state = 'nospace'
-                self.indent = 0
-                return False, None
-            case '[par]', _:
-                self.state = 'space'
-                self.indent = 0
-                return True, None
-            case '%', _:
-                attr = None
-                if self.state in ['space', 'nospace']:
-                    attr = LabelAttr('comment', self.indent)
-                emit = self.state == 'comment'
-                self.state = 'comment'
-                return emit, attr
-            case _:
-                if self.state in ['space', 'nospace']:
-                    if self.in_comment:
-                        mode = 'comment'
-                    else:
-                        mode = self.state
-                    attr = LabelAttr(mode, self.indent)
-                    self.state = 'normal'
-                    return True, attr
-                return True, None
-
-
-class SemBrTokenizer:
+class SemBrProcessor(object):
     tokenizer_name = 'distilbert-base-uncased'
 
-    def __init__(self, spaces=4, **kwargs):
+    def __init__(self, spaces=4):
         super().__init__()
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.tokenizer_name, **kwargs)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
         self.spaces = spaces
         self.replace_tokens = {
             # r'\n(?:\s*\n)+': '[par]',
-            '\n': '[newline]',
-            ' ' * self.spaces: '[indent]',
             # '\t': '[indent]',
+            # ' ' * self.spaces: '[indent]',
+            '\\%': '[percent]',
+            '\n': '[newline]',
         }
         self.reverse_replace_tokens = {
             v: k for k, v in self.replace_tokens.items()}
         self.tokenizer.add_tokens(list(self.replace_tokens.values()))
 
-    def __call__(self, text, **kwargs):
-        ftext = text
+    def _process_specials(self, lines):
         for k, v in self.replace_tokens.items():
-            if isinstance(v, str):
-                ftext = re.sub(k, v, ftext)
-        enc = self.tokenizer(ftext, return_offsets_mapping=True, **kwargs)
-        enc['formatted_text'] = ftext
-        return enc
+            # lines = [re.sub(k, v, l) for l in lines]
+            lines = [l.replace(k, v) for l in lines]
+        return lines
 
-    def convert_ids_to_tokens(self, ids, replace=True):
-        tokens = self.tokenizer.convert_ids_to_tokens(ids)
-        if not replace:
-            return tokens
-        return [self.reverse_replace_tokens.get(t, t) for t in tokens]
+    def _process_indents(self, lines):
+        nlines = []
+        indents = []
+        # get indent levels
+        for line in lines:
+            indent = 0
+            for c in line:
+                if c == ' ':
+                    indent += 1
+                elif c == '\t':
+                    indent += self.spaces
+                else:
+                    break
+            indent_level = int(indent / self.spaces)
+            nlines.append(line[indent_level * self.spaces:].rstrip())
+            indents.append(indent_level)
+        return nlines, indents
 
-    def convert_tokens_to_ids(self, tokens):
-        tokens = [self.replace_tokens.get(t, t) for t in tokens]
-        return self.tokenizer.convert_tokens_to_ids(tokens)
+    def _process_comments(self, lines, indents):
+        # normalize comments, ["xxx % comment"] -> ["xxx", "% comment"]
+        nclines = []
+        ncindents = []
+        for line, indent in zip(lines, indents):
+            if '%' in line:
+                normal, *comment = line.split('%')
+                comment = '%'.join(comment).strip()
+                if normal.strip():
+                    if comment:
+                        nclines += [normal, f'%{comment}']
+                        ncindents += [indent, indent]
+                        continue
+                    line = f'{normal}%'
+            nclines.append(line)
+            ncindents.append(indent)
+        return nclines, ncindents
 
+    def _process_modes(self, lines):
+        new_lines = []
+        modes = []
+        prev_status = 'start'
+        for line in lines:
+            if line.startswith('%'):
+                status = 'comment'
+            elif line.endswith('%'):
+                status = 'percent'
+                line = line.rstrip('%')
+            else:
+                status = 'normal'
+            match (prev_status, status):
+                case ('start', _):
+                    pass
+                case ('normal', _):
+                    modes.append('space')
+                case ('percent', _):
+                    modes.append('nospace')
+                case ('comment', 'normal'):
+                    modes.append('break')
+                case ('comment', 'percent'):
+                    modes.append('break')
+                case ('comment', 'comment'):
+                    modes.append('comment')
+                case (_, 'comment'):
+                    modes.append('comment')
+                case _:
+                    raise ValueError(
+                        'Unknown status transition: '
+                        f'{prev_status} -> {status}.')
+            new_lines.append(line)
+            prev_status = status
+        # last transition always force a break
+        modes.append('break')
+        return new_lines, modes
 
-class SemBrProcessor(object):
-    def __init__(self, tokenizer, spaces=4, max_indent=MAX_INDENT):
-        super().__init__()
-        self.tokenizer = tokenizer
-        self.spaces = spaces
-        self.max_indent = max_indent
+    def _flatten_with_modes(self, lines, modes):
+        in_comment = 0
+        flat_lines, flat_modes, offsets = [], [], []
+        prev_len = flat_len = 0
+        for line, mode in zip(lines, modes):
+            if in_comment >= 1:
+                line = re.sub(r'^\s*%', '', line)
+            if mode == 'break':
+                in_comment = 0
+                line = f'{line}[newline]'
+                mode = 'off'
+            elif mode == 'comment':
+                in_comment += 1
+                mode = 'space'
+            elif mode == 'space':
+                line = f'{line} '
+            elif mode == 'nospace':
+                pass
+            else:
+                raise ValueError(f'Unknown mode: {mode}.')
+            flat_lines.append(line)
+            flat_modes.append(mode)
+            prev_len = flat_len
+            flat_len += len(line)
+            offsets.append((prev_len, flat_len))
+        return ''.join(flat_lines), flat_modes, offsets
 
-    def __call__(self, text):
-        paras = re.split(r'\n(?:\s*\n)+', text)
-        paragraphs = [
-            self._process_paragraph(p.strip()) for p in paras if p.strip()]
-        return paragraphs
+    def _tokenize_with_modes(
+        self, text, line_modes, line_modes_offsets, line_indents
+    ):
+        enc = self.tokenizer(text, return_offsets_mapping=True)
+        words, modes, indents = [], [], []
+        pos = mode_idx = 0
+        # fill empty words in offset mapping
+        offset_mapping = []
+        for start, end in enc.offset_mapping:
+            if start < pos:
+                continue
+            if start > pos:
+                offset_mapping.append((pos, start))
+            offset_mapping.append((start, end))
+            pos = end
+        pos = 0
+        poses = []
+        for start, end in offset_mapping:
+            if pos >= len(text):
+                break
+            mode_offset = line_modes_offsets[mode_idx][1]
+            word = text[pos:end]
+            if not word:
+                continue
+            words.append(word)
+            indents.append(line_indents[mode_idx])
+            pos = max(pos, end)
+            if mode_offset >= end:
+                modes.append('off')
+                continue
+            mode = line_modes[mode_idx]
+            modes.append(mode)
+            mode_idx += 1
+            # current word is on a new line
+            indents[-1] = line_indents[mode_idx]
+        return enc.input_ids, words, modes, indents
 
     def _process_paragraph(self, text):
-        enc = self.tokenizer(text)
-        ids = enc.input_ids
-        tokens = self.tokenizer.convert_ids_to_tokens(ids, replace=False)
-        offsets = enc.offset_mapping
-        fsm = TokenFSM()
-        cursor = 0
-        ftext = enc['formatted_text']
-        mtext = []
-        pids = []
-        for pid, tok, (_, offset) in zip(ids, tokens, offsets):
-            emit, attr = fsm.transition(tok)
-            if attr is not None:
-                attr.indent = min(attr.indent, self.max_indent)
-                mtext.append(attr)
-            if emit:
-                if isinstance(emit, str):
-                    pid = self.tokenizer.convert_tokens_to_ids(emit)
-                mtext.append(ftext[cursor:offset])
-                pids.append(pid)
-            cursor = offset
-        mtext.append(LabelAttr('off'))
-        pattrs, ptext = {}, []
-        # omit first break
-        for t in mtext:
-            if isinstance(t, str):
-                ptext.append(t)
-                pattrs[len(ptext) - 1] = LabelAttr('off')
-            else:
-                pattrs[len(ptext) - 1] = t
-        pattrs = [pattrs.get(i, LabelAttr('off')) for i in range(len(ptext))]
+        lines = text.split('\n')
+        lines = self._process_specials(lines)
+        lines, indents = self._process_indents(lines)
+        lines, indents = self._process_comments(lines, indents)
+        lines, modes = self._process_modes(lines)
+        flat_lines, modes, modes_offsets = self._flatten_with_modes(lines, modes)
+        input_ids, words, modes, indents = self._tokenize_with_modes(
+            flat_lines, modes, modes_offsets, indents)
         result = {
-            'input_ids': pids,
-            'words': ptext,
-            'modes': [a.mode for a in pattrs],
-            'indents': [a.indent for a in pattrs],
-            # 'processed_text': ''.join(str(t) for t in mtext),
-            # 'formatted_text': ftext,
+            'input_ids': input_ids,
+            'words': words,
+            'modes': modes,
+            'indents': indents,
         }
         return result
 
-    def generate(self, words, modes, indents):
-        text = []
-        in_comment = False
-        for w, m, i in zip(words, modes, indents):
-            text.append(w)
-            if m in ['space', 'nospace']:
-                if not in_comment and m != 'space':
-                    text.append('%')
-                text.append('\n')
-                in_comment = False
-                if i:
-                    text.append(' ' * (i * self.spaces))
-            if m == 'comment':
-                text.append('\n%')
-                in_comment = True
-        return ''.join(text)
+    def __call__(self, text):
+        paras = []
+        for p in re.split(r'\n(?:\s*\n)+', text):
+            if not p.strip():
+                continue
+            paras.append(self._process_paragraph(p))
+        return paras
+
+    def _replace_newlines(self, words, modes, indents):
+        new_words, new_modes, new_indents = [], [], []
+        next_mode = None
+        for word, mode, indent in zip(words, modes, indents):
+            if word == '[newline]':
+                next_mode = 'break'
+                continue
+            if next_mode:
+                # if mode != 'off':
+                #     raise ValueError(
+                #         f'Cannot set mode {next_mode} '
+                #         f'when mode is {mode}.')
+                mode = next_mode
+                next_mode = None
+            new_words.append(word)
+            new_modes.append(mode)
+            new_indents.append(indent)
+        return new_words, new_modes, new_indents
+
+    def _generate_lines(self, words, modes, indents):
+        lbs = [
+            (o, m) for o, m in enumerate(modes)
+            if m in ('space', 'nospace', 'break')]
+        if not lbs or lbs[-1][0] < len(words):
+            lbs.append((len(words), 'space'))
+        lines, line_indents  = [], []
+        pos = in_comment = 0
+        for o, m in lbs:
+            line = ''.join(words[pos:o]).strip()
+            if line.startswith('%'):
+                in_comment = 1
+            if m == 'nospace':
+                line = f'{line}%'
+            if m in ('space', 'break'):
+                if in_comment > 1:
+                    line = f'% {line}'
+                if in_comment:
+                    in_comment += 1
+                if m == 'break':
+                    in_comment = 0
+            lines.append(line)
+            line_indents.append(indents[pos:o])
+            pos = o
+        # line_indents = [Counter(l).most_common(1)[0][0] for l in line_indents]
+        line_indents = [l[0] for l in line_indents]
+        return lines, line_indents
+
+    def _indent_lines(self, lines, indents):
+        spaces = ' ' * self.spaces
+        return [f'{spaces * i}{l}' for i, l in zip(indents, lines)]
+
+    def _generate_paragraph(self, processed):
+        words = processed['words']
+        modes = processed['modes']
+        indents = processed['indents']
+        words, modes, indents = self._replace_newlines(words, modes, indents)
+        lines, indents = self._generate_lines(words, modes, indents)
+        lines = self._indent_lines(lines, indents)
+        text = '\n'.join(lines)
+        for k, v in self.reverse_replace_tokens.items():
+            text = text.replace(k, v)
+        return text
+
+    def generate(self, paragraphs):
+        return '\n\n'.join(self._generate_paragraph(p) for p in paragraphs)
 
 
 class DataCollatorForTokenClassificationWithTruncation(
@@ -204,11 +288,10 @@ class DataCollatorForTokenClassificationWithTruncation(
 
 
 if __name__ == '__main__':
-    from icecream import ic
-    test = open('./data/test/mair.tex', 'r').read()
-    tokenizer = SemBrTokenizer()
-    processor = SemBrProcessor(tokenizer)
-    preped = processor(test)[2]
-    tokens = tokenizer.convert_ids_to_tokens(preped['input_ids'])
-    print(processor.generate(
-        preped['words'], preped['modes'], preped['indents']))
+    # test = open('./data/test/mair.tex', 'r').read()
+    test = open('./data/example.tex', 'r').read()
+    processor = SemBrProcessor()
+    results = processor(test)
+    # for r in results:
+    #     r['modes'] = ['off' if m != 'break' else m for m in r['modes']]
+    print(processor.generate(results))

@@ -10,7 +10,12 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode": false
+            "justMyCode": false,
+            "env": {
+                "HF_DATASETS_OFFLINE": "1",
+                "TRANSFORMERS_OFFLINE": "1",
+                "WANDB_DISABLED": "true",
+            },
         }
     ]
 }
