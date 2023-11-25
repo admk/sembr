@@ -1,9 +1,10 @@
+import re
 import os
 import glob
 
 import datasets
 
-from .process import SemBrProcessor, SemBrTokenizer
+from .process import SemBrProcessor, SemBrTokenizer, MAX_INDENT
 
 
 logger = datasets.logging.get_logger(__name__)
@@ -20,27 +21,24 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.tokenizer = SemBrTokenizer().from_pretrained(self.model_name, use_fast=False)
+        self.tokenizer = SemBrTokenizer()
         self.processor = SemBrProcessor(self.tokenizer)
 
     def _info(self):
+        modes = ['off', 'space', 'nospace', 'comment']
+        indents = [str(i) for i in range(MAX_INDENT)]
+        labels = ['off'] + [f'{m}-{i}' for m in modes for i in indents]
         return datasets.DatasetInfo(
-            features=datasets.Features(
-                {
-                    "id": datasets.Value("string"),
-                    "tokens": datasets.Sequence(datasets.Value("string")),
-                    "sembr_tags": datasets.Sequence(
-                        datasets.features.ClassLabel(
-                            names=['off', 'space', 'nospace', 'comment']
-                        )
-                    ),
-                    "indent_levels": datasets.Sequence(
-                        datasets.features.ClassLabel(
-                            names=[str(i) for i in range(5)]
-                        )
-                    ),
-                }
-            ),
+            features=datasets.Features({
+                "input_ids": datasets.Sequence(datasets.Value("int32")),
+                "words": datasets.Sequence(datasets.Value("string")),
+                "modes": datasets.Sequence(
+                    datasets.features.ClassLabel(names=modes)),
+                "indents": datasets.Sequence(
+                    datasets.features.ClassLabel(names=indents)),
+                "labels": datasets.Sequence(
+                    datasets.features.ClassLabel(names=labels)),
+            })
         )
 
     def _split_generators(self, dl_manager):
@@ -54,10 +52,17 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
         ]
 
     def _generate_examples(self, root):
+        eid = 0
         for path in glob.glob(os.path.join(root, "*.tex")):
-            logger.info(f'Generating examples from {path!r}')
+            logger.info(f'Generating examples from {path!r}...')
             with open(path, 'r', encoding='utf-8') as f:
                 text = f.read()
-            results = self.processor(text)
-            for r in results:
-                yield r
+            for p in self.processor(text):
+                p['labels'] = labels = []
+                for m, i in zip(p['modes'], p['indents']):
+                    if m == 'off':
+                        labels.append('off')
+                    else:
+                        labels.append(f'{m}-{i}')
+                yield eid, p
+                eid += 1

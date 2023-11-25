@@ -1,54 +1,22 @@
 import re
 from dataclasses import dataclass
 
-from transformers import PreTrainedTokenizerFast
+from transformers import AutoTokenizer, DataCollatorForTokenClassification
 
 
-LABELS = [
-    'off',
-    'space0', 'space1', 'space2', 'space3', 'space4',
-    'nospace0', 'nospace1', 'nospace2', 'nospace3', 'nospace4',
-    'comment0', 'comment1', 'comment2', 'comment3', 'comment4',
-]
-LABELS = [f'<{l}>' for l in LABELS]
+MAX_INDENT = 10
+LABELS = ['off', 'space', 'nospace', 'comment']
 id2label = {i: l for i, l in enumerate(LABELS)}
 label2id = {l: i for i, l in enumerate(LABELS)}
 
 
 @dataclass
 class LabelAttr:
-    br: bool
+    mode: str = True
     indent: int = 0
-    trail_space: bool = True
-    comment: bool = False
 
     def __str__(self):
-        return id2label[attr2id(self)]
-
-
-def attr2id(label: LabelAttr):
-    if not label.br:
-        name = 'off'
-    elif label.comment:
-        name = f'comment{label.indent}'
-    elif label.trail_space:
-        name = f'space{label.indent}'
-    else:
-        name = f'nospace{label.indent}'
-    return label2id[f'<{name}>']
-
-
-def id2attr(label_id: int):
-    name = id2label[label_id]
-    if name == 'off':
-        return LabelAttr(br=False)
-    elif name.startswith('comment'):
-        return LabelAttr(br=True, indent=int(name[-1]), comment=True)
-    elif name.startswith('space'):
-        return LabelAttr(br=True, indent=int(name[-1]), trail_space=True)
-    elif name.startswith('nospace'):
-        return LabelAttr(br=True, indent=int(name[-1]), trail_space=False)
-    raise ValueError(f'Invalid label id: {label_id}.')
+        return f'<{self.mode}-{self.indent}>'
 
 
 class TokenFSM(object):
@@ -94,51 +62,66 @@ class TokenFSM(object):
             case '%', _:
                 attr = None
                 if self.state in ['space', 'nospace']:
-                    attr = LabelAttr(
-                        br=True,
-                        indent=self.indent,
-                        trail_space=self.trail_space,
-                        comment=True)
+                    attr = LabelAttr('comment', self.indent)
                 emit = self.state == 'comment'
                 self.state = 'comment'
                 return emit, attr
             case _:
                 if self.state in ['space', 'nospace']:
-                    attr = LabelAttr(
-                        br=True, indent=self.indent,
-                        trail_space=self.trail_space, comment=self.in_comment)
+                    if self.in_comment:
+                        mode = 'comment'
+                    else:
+                        mode = self.state
+                    attr = LabelAttr(mode, self.indent)
                     self.state = 'normal'
                     return True, attr
                 return True, None
 
 
-class SemBrTokenizer(PreTrainedTokenizerFast):
-    def __init__(self, *args, spaces=4, **kwargs):
-        super().__init__(*args, **kwargs)
+class SemBrTokenizer:
+    tokenizer_name = 'distilbert-base-uncased'
+
+    def __init__(self, spaces=4, **kwargs):
+        super().__init__()
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.tokenizer_name, **kwargs)
         self.spaces = spaces
         self.replace_tokens = {
-            r'\n(?:\s*\n)+': '[par]',
+            # r'\n(?:\s*\n)+': '[par]',
             '\n': '[newline]',
             ' ' * self.spaces: '[indent]',
             # '\t': '[indent]',
         }
-        self.add_tokens(list(self.replace_tokens.values()))
+        self.reverse_replace_tokens = {
+            v: k for k, v in self.replace_tokens.items()}
+        self.tokenizer.add_tokens(list(self.replace_tokens.values()))
 
     def __call__(self, text, **kwargs):
         ftext = text
         for k, v in self.replace_tokens.items():
             if isinstance(v, str):
                 ftext = re.sub(k, v, ftext)
-        enc = super().__call__(ftext, return_offsets_mapping=True, **kwargs)
+        enc = self.tokenizer(ftext, return_offsets_mapping=True, **kwargs)
         enc['formatted_text'] = ftext
         return enc
 
+    def convert_ids_to_tokens(self, ids, replace=True):
+        tokens = self.tokenizer.convert_ids_to_tokens(ids)
+        if not replace:
+            return tokens
+        return [self.reverse_replace_tokens.get(t, t) for t in tokens]
+
+    def convert_tokens_to_ids(self, tokens):
+        tokens = [self.replace_tokens.get(t, t) for t in tokens]
+        return self.tokenizer.convert_tokens_to_ids(tokens)
+
 
 class SemBrProcessor(object):
-    def __init__(self, tokenizer, spaces=4):
+    def __init__(self, tokenizer, spaces=4, max_indent=MAX_INDENT):
         super().__init__()
         self.tokenizer = tokenizer
         self.spaces = spaces
+        self.max_indent = max_indent
 
     def __call__(self, text):
         paras = re.split(r'\n(?:\s*\n)+', text)
@@ -147,9 +130,9 @@ class SemBrProcessor(object):
         return paragraphs
 
     def _process_paragraph(self, text):
-        enc = tokenizer(text)
+        enc = self.tokenizer(text)
         ids = enc.input_ids
-        tokens = tokenizer.convert_ids_to_tokens(ids)
+        tokens = self.tokenizer.convert_ids_to_tokens(ids, replace=False)
         offsets = enc.offset_mapping
         fsm = TokenFSM()
         cursor = 0
@@ -159,59 +142,73 @@ class SemBrProcessor(object):
         for pid, tok, (_, offset) in zip(ids, tokens, offsets):
             emit, attr = fsm.transition(tok)
             if attr is not None:
+                attr.indent = min(attr.indent, self.max_indent)
                 mtext.append(attr)
             if emit:
                 if isinstance(emit, str):
-                    pid = tokenizer.convert_tokens_to_ids(emit)
+                    pid = self.tokenizer.convert_tokens_to_ids(emit)
                 mtext.append(ftext[cursor:offset])
                 pids.append(pid)
             cursor = offset
-        mtext.append(LabelAttr(br=True))
+        mtext.append(LabelAttr('off'))
         pattrs, ptext = {}, []
         # omit first break
         for t in mtext:
             if isinstance(t, str):
                 ptext.append(t)
-                pattrs[len(ptext) - 1] = LabelAttr(br=False)
+                pattrs[len(ptext) - 1] = LabelAttr('off')
             else:
                 pattrs[len(ptext) - 1] = t
-        pattrs = [pattrs.get(i, LabelAttr(br=False)) for i in range(len(ptext))]
+        pattrs = [pattrs.get(i, LabelAttr('off')) for i in range(len(ptext))]
         result = {
             'input_ids': pids,
             'words': ptext,
-            'attrs': pattrs,
-            'attr_ids': [attr2id(a) for a in pattrs],
-            'processed_text': ''.join(str(t) for t in mtext),
-            'formatted_text': ftext,
+            'modes': [a.mode for a in pattrs],
+            'indents': [a.indent for a in pattrs],
+            # 'processed_text': ''.join(str(t) for t in mtext),
+            # 'formatted_text': ftext,
         }
         return result
 
-    def generate(self, words, attrs):
+    def generate(self, words, modes, indents):
         text = []
         in_comment = False
-        for w, a in zip(words, attrs):
+        for w, m, i in zip(words, modes, indents):
             text.append(w)
-            if a.br:
-                if not in_comment and not a.trail_space:
+            if m in ['space', 'nospace']:
+                if not in_comment and m != 'space':
                     text.append('%')
                 text.append('\n')
                 in_comment = False
-                if a.indent:
-                    text.append(' ' * (a.indent * self.spaces))
-            if a.comment:
-                text.append('%')
+                if i:
+                    text.append(' ' * (i * self.spaces))
+            if m == 'comment':
+                text.append('\n%')
                 in_comment = True
         return ''.join(text)
 
 
+class DataCollatorForTokenClassificationWithTruncation(
+    DataCollatorForTokenClassification
+):
+    def __init__(self, tokenizer, max_length=512, **kwargs):
+        super().__init__(tokenizer, **kwargs)
+        self.max_length = max_length
+
+    def __call__(self, features, return_tensors=None):
+        truncated_features = []
+        for f in features:
+            truncated_features.append(
+                {k: v[:self.max_length] for k, v in f.items()})
+        return super().__call__(truncated_features, return_tensors)
+
+
 if __name__ == '__main__':
+    from icecream import ic
     test = open('./data/test/mair.tex', 'r').read()
-    model_name = 'distilbert-base-uncased'
-    tokenizer = SemBrTokenizer.from_pretrained(model_name)
+    tokenizer = SemBrTokenizer()
     processor = SemBrProcessor(tokenizer)
     preped = processor(test)[2]
-    ptext = preped['words']
-    pattrs = preped['attrs']
-    pids = preped['input_ids']
-    tokens = tokenizer.convert_ids_to_tokens(pids)
-    print(processor.generate(ptext, pattrs))
+    tokens = tokenizer.convert_ids_to_tokens(preped['input_ids'])
+    print(processor.generate(
+        preped['words'], preped['modes'], preped['indents']))
