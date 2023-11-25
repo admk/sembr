@@ -1,5 +1,4 @@
 import re
-from collections import Counter
 from dataclasses import dataclass
 
 from transformers import AutoTokenizer, DataCollatorForTokenClassification
@@ -152,21 +151,16 @@ class SemBrProcessor(object):
         # fill empty words in offset mapping
         offset_mapping = []
         for start, end in enc.offset_mapping:
-            if start < pos:
-                continue
-            if start > pos:
-                offset_mapping.append((pos, start))
-            offset_mapping.append((start, end))
+            offset_mapping.append((min(start, pos), end))
             pos = end
         pos = 0
-        poses = []
-        for start, end in offset_mapping:
+        input_ids = []
+        for tid, (start, end) in zip(enc.input_ids, offset_mapping):
             if pos >= len(text):
                 break
             mode_offset = line_modes_offsets[mode_idx][1]
             word = text[pos:end]
-            if not word:
-                continue
+            input_ids.append(tid)
             words.append(word)
             indents.append(line_indents[mode_idx])
             pos = max(pos, end)
@@ -178,12 +172,14 @@ class SemBrProcessor(object):
             mode_idx += 1
             # current word is on a new line
             indents[-1] = line_indents[mode_idx]
-        return enc.input_ids, words, modes, indents
+        return input_ids, words, modes, indents
 
     def _process_paragraph(self, text):
         lines = text.split('\n')
         lines = self._process_specials(lines)
         lines, indents = self._process_indents(lines)
+        base_indent = min(indents)
+        indents = [i - base_indent for i in indents]
         lines, indents = self._process_comments(lines, indents)
         lines, modes = self._process_modes(lines)
         flat_lines, modes, modes_offsets = self._flatten_with_modes(lines, modes)
@@ -194,7 +190,13 @@ class SemBrProcessor(object):
             'words': words,
             'modes': modes,
             'indents': indents,
+            'base_indent': base_indent,
         }
+        keys = ['input_ids', 'words', 'modes', 'indents']
+        if len(set(len(result[k]) for k in keys)) != 1:
+            len_dict = {k: len(result[k]) for k in keys}
+            raise ValueError(
+                f'Lengths do not match. Found: {len_dict}.')
         return result
 
     def __call__(self, text):
@@ -252,17 +254,20 @@ class SemBrProcessor(object):
         line_indents = [l[0] for l in line_indents]
         return lines, line_indents
 
-    def _indent_lines(self, lines, indents):
+    def _indent_lines(self, lines, indents, base_indent):
         spaces = ' ' * self.spaces
-        return [f'{spaces * i}{l}' for i, l in zip(indents, lines)]
+        return [
+            f'{spaces * (i + base_indent)}{l}'
+            for i, l in zip(indents, lines)]
 
     def _generate_paragraph(self, processed):
         words = processed['words']
         modes = processed['modes']
         indents = processed['indents']
+        base_indent = processed['base_indent']
         words, modes, indents = self._replace_newlines(words, modes, indents)
         lines, indents = self._generate_lines(words, modes, indents)
-        lines = self._indent_lines(lines, indents)
+        lines = self._indent_lines(lines, indents, base_indent)
         text = '\n'.join(lines)
         for k, v in self.reverse_replace_tokens.items():
             text = text.replace(k, v)
@@ -292,6 +297,9 @@ if __name__ == '__main__':
     test = open('./data/example.tex', 'r').read()
     processor = SemBrProcessor()
     results = processor(test)
-    # for r in results:
-    #     r['modes'] = ['off' if m != 'break' else m for m in r['modes']]
+    print('--- Processed ---')
+    print(processor.generate(results))
+    for r in results:
+        r['modes'] = ['off' if m != 'break' else m for m in r['modes']]
+    print('--- Flattened ---')
     print(processor.generate(results))

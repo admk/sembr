@@ -8,7 +8,7 @@ from .process import SemBrProcessor
 
 logger = datasets.logging.get_logger(__name__)
 
-MAX_INDENT = 10
+MAX_INDENT = 4
 
 
 class SemBr2023(datasets.GeneratorBasedBuilder):
@@ -26,8 +26,9 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
 
     def _info(self):
         modes = ['off', 'space', 'nospace']
-        indents = [str(i) for i in range(MAX_INDENT)]
-        labels = ['off'] + [f'{m}-{i}' for m in modes for i in indents]
+        indents = [str(i) for i in range(MAX_INDENT + 1)]
+        labels = ['off']
+        labels += [f'{m}-{i}' for m in ('space', 'nospace') for i in indents]
         return datasets.DatasetInfo(
             features=datasets.Features({
                 "input_ids": datasets.Sequence(datasets.Value("int32")),
@@ -36,6 +37,7 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
                     datasets.features.ClassLabel(names=modes)),
                 "indents": datasets.Sequence(
                     datasets.features.ClassLabel(names=indents)),
+                "base_indent": datasets.Value("int32"),
                 "labels": datasets.Sequence(
                     datasets.features.ClassLabel(names=labels)),
             })
@@ -59,10 +61,14 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
                 text = f.read()
             for p in self.processor(text):
                 p['labels'] = labels = []
+                indents = []
                 for m, i in zip(p['modes'], p['indents']):
+                    i = min(i, MAX_INDENT)
+                    indents.append(i)
                     if m == 'off':
                         labels.append('off')
                     else:
                         labels.append(f'{m}-{i}')
+                p['indents'] = indents
                 yield eid, p
                 eid += 1
