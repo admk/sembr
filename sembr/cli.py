@@ -1,16 +1,9 @@
 import argparse
 
 import requests
-from flask import Flask, request
-
-import torch
-from tqdm import tqdm
-from transformers import AutoModelForTokenClassification
-
-from sembr.process import SemBrProcessor
 
 
-model_name = './checkpoints/sembr2023-distilbert-base-uncased-full/checkpoint-2800'
+model_name = 'admk/sembr2023-distilbert-base-uncased'
 
 
 def parse_args():
@@ -20,12 +13,15 @@ def parse_args():
     parser.add_argument('-o', '--output-file', type=str, default=None)
     parser.add_argument('-w', '--words-per-line', type=int, default=10)
     parser.add_argument('-s', '--server', type=str, default='localhost:5000')
-    parser.add_argument('-d', '--host-daemon', action='store_true')
+    parser.add_argument('-l', '--listen', action='store_true')
     parser.add_argument('-p', '--port', type=int, default=5000)
     return parser.parse_args()
 
 
 def init(model_name):
+    import torch
+    from transformers import AutoModelForTokenClassification
+    from sembr.process import SemBrProcessor
     model = AutoModelForTokenClassification.from_pretrained(model_name)
     model.eval()
     if torch.cuda.is_available():
@@ -37,6 +33,8 @@ def init(model_name):
 
 
 def process(text, model, processor):
+    import torch
+    from tqdm import tqdm
     max_length = model.config.max_position_embeddings
     overlap_length = int(max_length / 8)
     results = processor(text)
@@ -68,17 +66,9 @@ def process(text, model, processor):
     return processor.generate(results)
 
 
-def rewrap(input_file, output_file, model, processor):
-    with open(input_file, 'r', encoding='utf-8') as f:
-        text = f.read()
-    results = process(text, model, processor)
-    if output_file is None:
-        return results
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(results)
-
-
 def start_server(port, model, processor):
+    from flask import Flask, request
+
     app = Flask(__name__)
 
     @app.route('/check')
@@ -106,31 +96,34 @@ def check_server(server):
     return True
 
 
-def rewrap_on_server(input_file, output_file, server):
-    with open(input_file, 'r', encoding='utf-8') as f:
-        text = f.read()
+def rewrap_on_server(text, server):
     results = requests.post(
         f'http://{server}/rewrap', data={'text': text})
     if results.status_code != 200:
         raise ValueError(f'Error {results.status_code}: {results.text}')
-    results = results.text
-    if output_file is None:
-        return results
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write(results)
+    return results.text
 
 
-def main():
-    args = parse_args()
+def main(args):
+    if args.input_file is not None:
+        with open(args.input_file, 'r', encoding='utf-8') as f:
+            text = f.read()
+    else:
+        text = input()
     if check_server(args.server):
-        return rewrap_on_server(args.input_file, args.output_file, args.server)
-    model, processor = init(args.model_name)
-    if args.host_daemon:
-        return start_server(args.port, model, processor)
-    return rewrap(args.input_file, args.output_file, model, processor)
+        result = rewrap_on_server(text, args.server)
+    else:
+        model, processor = init(args.model_name)
+        if args.listen:
+            return start_server(args.port, model, processor)
+        else:
+            result = process(text, model, processor)
+    if args.output_file is None:
+        print(result)
+    else:
+        with open(args.output_file, 'w', encoding='utf-8') as f:
+            f.write(result)
 
 
 if __name__ == '__main__':
-    result = main()
-    if result is not None:
-        print(result)
+    main(parse_args())
