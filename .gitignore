@@ -1,4 +1,4 @@
 __pycache__/
 wandb/
-runs/
+checkpoints/
 .DS_Store
