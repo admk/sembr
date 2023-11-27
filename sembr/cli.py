@@ -1,6 +1,7 @@
 import os
 import sys
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 
 def parse_args():
