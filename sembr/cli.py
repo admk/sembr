@@ -12,9 +12,9 @@ def parse_args():
     parser.add_argument('-i', '--input-file', type=str, default=None)
     parser.add_argument('-o', '--output-file', type=str, default=None)
     parser.add_argument('-w', '--words-per-line', type=int, default=10)
-    parser.add_argument('-s', '--server', type=str, default='127.0.0.1:5000')
+    parser.add_argument('-s', '--server', type=str, default='127.0.0.1')
     parser.add_argument('-l', '--listen', action='store_true')
-    parser.add_argument('-p', '--port', type=int, default=5000)
+    parser.add_argument('-p', '--port', type=int, default=8384)
     return parser.parse_args()
 
 
@@ -53,23 +53,24 @@ def start_server(port, tokenizer, model, processor):
     app.run(port=port)
 
 
-def check_server(server):
+def check_server(server, port):
     import requests
+    from requests.exceptions import ConnectionError, ReadTimeout
     if not server:
         return False
     try:
-        status = requests.get(f'http://{server}/check', timeout=1)
-    except requests.exceptions.ConnectionError:
+        status = requests.get(f'http://{server}:{port}/check', timeout=0.3)
+    except (ConnectionError, ReadTimeout) as e:
         return False
     if status.status_code != 200 or status.text != 'OK':
         return False
     return True
 
 
-def rewrap_on_server(text, server):
+def rewrap_on_server(text, server, port):
     import requests
     results = requests.post(
-        f'http://{server}/rewrap', data={'text': text})
+        f'http://{server}:{port}/rewrap', data={'text': text})
     if results.status_code != 200:
         raise ValueError(f'Error {results.status_code}: {results.text}')
     return results.text
@@ -84,8 +85,8 @@ def main(args):
             text = f.read()
     else:
         text = sys.stdin.read()
-    if check_server(args.server):
-        result = rewrap_on_server(text, args.server)
+    if check_server(args.server, args.port):
+        result = rewrap_on_server(text, args.server, args.port)
     else:
         from .inference import inference
         tokenizer, model, processor = init(args.model_name)
