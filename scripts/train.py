@@ -15,7 +15,9 @@ from sembr.process import (
     SemBrProcessor, DataCollatorForTokenClassificationWithTruncation)
 
 
-def _process_examples(examples, processor, tokenizer, mode_names):
+def _process_examples(
+    examples, processor, tokenizer, mode_names, max_indent, label2id
+):
     examples['modes'] = [
         [mode_names[i] for i in bm] for bm in examples['modes']]
     transposed = [dict(zip(examples, c)) for c in zip(*examples.values())]
@@ -24,13 +26,13 @@ def _process_examples(examples, processor, tokenizer, mode_names):
         r['labels'] = labels = []
         indents = []
         for m, i in zip(r.pop('modes'), r.pop('indents')):
-            i = min(i, MAX_INDENT)
+            i = min(i, max_indent)
             indents.append(i)
             if m == 'off':
                 label = 'off'
             else:
                 label = f'{m}-{i}'
-            labels.append(LABEL2ID[label])
+            labels.append(label2id[label])
         r.pop('base_indent')
     keys = ['input_ids', 'labels']
     return {k: [d[k] for d in results] for k in keys}
@@ -48,13 +50,14 @@ def chunk_examples(examples):
     return {'input_ids': id_chunks, 'labels': label_chunks}
 
 
-def process_dataset(dataset, processor, tokenizer):
+def process_dataset(dataset, processor, tokenizer, max_indent, label2id):
     mode_names = dataset.features['modes'].feature.names
     removed_columns = [
         'flat_lines', 'modes', 'mode_offsets', 'indents', 'base_indent']
     process_examples = functools.partial(
         _process_examples,
-        processor=processor, tokenizer=tokenizer, mode_names=mode_names)
+        processor=processor, tokenizer=tokenizer, mode_names=mode_names,
+        max_indent=max_indent, label2id=label2id)
     dataset = dataset.map(
         process_examples, batched=True, remove_columns=removed_columns)
     dataset = dataset.map(chunk_examples, batched=True)
@@ -103,16 +106,18 @@ def compute_metrics(result):
     return metrics
 
 
-def init_dataset(args):
+def init_dataset(args, label2id, max_length):
     dataset = datasets.load_dataset('./sembr/sembr2023.py', 'sembr2023')
     processor = SemBrProcessor()
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
     processor.prepare_tokenizer(tokenizer)
-    train_dataset = process_dataset(dataset['train'], processor, tokenizer)
-    test_dataset = process_dataset(dataset['test'], processor, tokenizer)
+    train_dataset = process_dataset(
+        dataset['train'], processor, tokenizer, args.max_indent, label2id)
+    test_dataset = process_dataset(
+        dataset['test'], processor, tokenizer, args.max_indent, label2id)
     print(f'{len(train_dataset)=}, {len(test_dataset)=}')
     collator = DataCollatorForTokenClassificationWithTruncation(
-        tokenizer, padding='max_length', max_length=512)
+        tokenizer, padding='max_length', max_length=max_length)
     return train_dataset, test_dataset, tokenizer, collator
 
 
@@ -125,22 +130,27 @@ def init_labels(max_indent):
     return id2label, label2id
 
 
-def main(args):
-    train_dataset, test_dataset, tokenizer, collator = init_dataset(args)
-    id2label, label2id = init_labels(args.max_indent)
+def init_model(model_name, max_indent):
+    id2label, label2id = init_labels(max_indent)
     model = AutoModelForTokenClassification.from_pretrained(
-        args.model_name, num_labels=len(id2label),
-        id2label=id2label, label2id=label2id)
+        model_name, ignore_mismatched_sizes=True,
+        num_labels=len(id2label), id2label=id2label, label2id=label2id)
+    return model
+
+
+def main(args):
+    model = init_model(args.model, args.max_indent)
+    max_length = model.config.max_position_embeddings
+    train_dataset, test_dataset, tokenizer, collator = \
+        init_dataset(args, model.config.label2id, max_length)
     model.config.__dict__['max_indent'] = args.max_indent
     model.resize_token_embeddings(len(tokenizer))
-    if args.classifier_only:
-        for n, p in model.named_parameters():
-            if 'classifier' not in n:
-                p.requires_grad = False
-    run_name = f'sembr2023-{args.model_name}'
+    model_name = args.model.split('/')[-1]
+    run_name = f'sembr2023-{model_name}'
     training_args = TrainingArguments(
         output_dir=f'checkpoints/{run_name}',
         run_name=run_name,
+        report_to=args.report_to,
         learning_rate=args.learning_rate,
         lr_scheduler_type='cosine',
         per_device_train_batch_size=args.train_batch_size,
@@ -176,17 +186,26 @@ def main(args):
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('model-name', type=str)
-    parser.add_argument('-co', '--classifier-only', action='store_true')
+    parser.add_argument('model', type=str)
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-5)
     parser.add_argument('-tb', '--train-batch-size', type=int, default=64)
     parser.add_argument('-eb', '--eval-batch-size', type=int, default=128)
     parser.add_argument('-mi', '--max-indent', type=int, default=3)
     parser.add_argument('-hu', '--hub-user', type=str, default=None)
-    parser.add_argument('-ms', '--max-steps', type=int, default=3000)
-    parser.add_argument('-es', '--eval-steps', type=int, default=100)
+    parser.add_argument('-ms', '--max-steps', type=int, default=5000)
+    parser.add_argument('-es', '--eval-steps', type=int, default=10)
     parser.add_argument('-ss', '--save-steps', type=int, default=100)
-    return parser.parse_args()
+    parser.add_argument('-rt', '--report-to', type=str, default='all')
+    parser.add_argument('-d', '--debug', action='store_true')
+    args = parser.parse_args()
+    if args.debug:
+        import debugpy
+        debugpy.listen(5678)
+        print('Waiting for debugger...')
+        debugpy.wait_for_client()
+        args.report_to = 'none'
+        args.hub_user = None
+    return args
 
 
 if __name__ == '__main__':
