@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 def parse_args():
     import argparse
     parser = argparse.ArgumentParser()
-    model_name = 'admko/sembr2023-distilbert-base-uncased'
+    model_name = 'admko/sembr2023-bert-small'
     parser.add_argument('-m', '--model-name', type=str, default=model_name)
     parser.add_argument('-i', '--input-file', type=str, default=None)
     parser.add_argument('-o', '--output-file', type=str, default=None)
