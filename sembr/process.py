@@ -4,11 +4,8 @@ from transformers import AutoTokenizer, DataCollatorForTokenClassification
 
 
 class SemBrProcessor(object):
-    tokenizer_name = 'distilbert-base-uncased'
-
     def __init__(self, spaces=4):
         super().__init__()
-        self.tokenizer = AutoTokenizer.from_pretrained(self.tokenizer_name)
         self.spaces = spaces
         self.replace_tokens = {
             # r'\n(?:\s*\n)+': '[par]',
@@ -19,7 +16,9 @@ class SemBrProcessor(object):
         }
         self.reverse_replace_tokens = {
             v: k for k, v in self.replace_tokens.items()}
-        self.tokenizer.add_tokens(list(self.replace_tokens.values()))
+
+    def prepare_tokenizer(self, tokenizer):
+        tokenizer.add_tokens(list(self.replace_tokens.values()))
 
     def _process_specials(self, lines):
         for k, v in self.replace_tokens.items():
@@ -46,7 +45,7 @@ class SemBrProcessor(object):
         return nlines, indents
 
     def _process_comments(self, lines, indents):
-        # normalize comments, ["xxx % comment"] -> ["xxx", "% comment"]
+        # normalize comments, ['xxx % comment'] -> ['xxx', '% comment']
         nclines = []
         ncindents = []
         for line, indent in zip(lines, indents):
@@ -127,10 +126,27 @@ class SemBrProcessor(object):
             offsets.append((prev_len, flat_len))
         return ''.join(flat_lines), flat_modes, offsets
 
+    def _process_paragraph(self, text):
+        lines = text.split('\n')
+        lines = self._process_specials(lines)
+        lines, indents = self._process_indents(lines)
+        base_indent = min(indents)
+        indents = [i - base_indent for i in indents]
+        lines, indents = self._process_comments(lines, indents)
+        lines, modes = self._process_modes(lines)
+        flat_lines, modes, mode_offsets = self._flatten_with_modes(lines, modes)
+        return {
+            'flat_lines': flat_lines,
+            'modes': modes,
+            'mode_offsets': mode_offsets,
+            'indents': indents,
+            'base_indent': base_indent,
+        }
+
     def _tokenize_with_modes(
-        self, text, line_modes, line_modes_offsets, line_indents
+        self, tokenizer, text, line_modes, line_mode_offsets, line_indents
     ):
-        enc = self.tokenizer(text, return_offsets_mapping=True)
+        enc = tokenizer(text, return_offsets_mapping=True)
         words, modes, indents = [], [], []
         pos = mode_idx = 0
         # fill empty words in offset mapping
@@ -143,7 +159,7 @@ class SemBrProcessor(object):
         for tid, (start, end) in zip(enc.input_ids, offset_mapping):
             if pos >= len(text):
                 break
-            mode_offset = line_modes_offsets[mode_idx][1]
+            mode_offset = line_mode_offsets[mode_idx][1]
             word = text[pos:end]
             input_ids.append(tid)
             words.append(word)
@@ -159,30 +175,31 @@ class SemBrProcessor(object):
             indents[-1] = line_indents[mode_idx]
         return input_ids, words, modes, indents
 
-    def _process_paragraph(self, text):
-        lines = text.split('\n')
-        lines = self._process_specials(lines)
-        lines, indents = self._process_indents(lines)
-        base_indent = min(indents)
-        indents = [i - base_indent for i in indents]
-        lines, indents = self._process_comments(lines, indents)
-        lines, modes = self._process_modes(lines)
-        flat_lines, modes, modes_offsets = self._flatten_with_modes(lines, modes)
-        input_ids, words, modes, indents = self._tokenize_with_modes(
-            flat_lines, modes, modes_offsets, indents)
-        result = {
-            'input_ids': input_ids,
-            'words': words,
-            'modes': modes,
-            'indents': indents,
-            'base_indent': base_indent,
-        }
-        keys = ['input_ids', 'words', 'modes', 'indents']
-        if len(set(len(result[k]) for k in keys)) != 1:
-            len_dict = {k: len(result[k]) for k in keys}
-            raise ValueError(
-                f'Lengths do not match. Found: {len_dict}.')
-        return result
+    def tokenize_with_modes(self, tokenizer, results):
+        self.prepare_tokenizer(tokenizer)
+        new_results = []
+        for r in results:
+            flat_lines = r['flat_lines']
+            modes = r['modes']
+            mode_offsets = r['mode_offsets']
+            indents = r['indents']
+            base_indent = r['base_indent']
+            input_ids, words, modes, indents = self._tokenize_with_modes(
+                tokenizer, flat_lines, modes, mode_offsets, indents)
+            tokenized = {
+                'input_ids': input_ids,
+                'words': words,
+                'modes': modes,
+                'indents': indents,
+                'base_indent': base_indent,
+            }
+            keys = ['input_ids', 'words', 'modes', 'indents']
+            if len(set(len(tokenized[k]) for k in keys)) != 1:
+                len_dict = {k: len(tokenized[k]) for k in keys}
+                raise ValueError(
+                    f'Lengths do not match. Found: {len_dict}.')
+            new_results.append(tokenized)
+        return new_results
 
     def __call__(self, text):
         paras = []
@@ -281,7 +298,9 @@ if __name__ == '__main__':
     # test = open('./data/test/mair.tex', 'r').read()
     test = open('./data/example.tex', 'r').read()
     processor = SemBrProcessor()
+    tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased')
     results = processor(test)
+    results = processor.tokenize_with_modes(tokenizer, results)
     print('--- Processed ---')
     print(processor.generate(results))
     for r in results:

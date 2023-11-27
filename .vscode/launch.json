@@ -14,7 +14,7 @@
             "env": {
                 "HF_DATASETS_OFFLINE": "1",
                 "TRANSFORMERS_OFFLINE": "1",
-                // "WANDB_DISABLED": "true",
+                "WANDB_DISABLED": "true",
                 "CUDA_VISIBLE_DEVICES": "0",
             },
         }

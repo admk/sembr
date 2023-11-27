@@ -8,17 +8,16 @@ from .process import SemBrProcessor
 
 logger = datasets.logging.get_logger(__name__)
 
-MAX_INDENT = 3
+MAX_INDENT = 10
 
 
 class SemBr2023(datasets.GeneratorBasedBuilder):
     BUILDER_CONFIGS = [
         datasets.BuilderConfig(
-            name="sembr2023",
-            version=datasets.Version("1.0.0"),
-            description="SemBr2023 dataset"),
+            name='sembr2023',
+            version=datasets.Version('1.0.0'),
+            description='SemBr2023 dataset'),
     ]
-    model_name = 'distilbert-base-uncased'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -27,19 +26,16 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
     def _info(self):
         modes = ['off', 'space', 'nospace']
         indents = [str(i) for i in range(MAX_INDENT + 1)]
-        labels = ['off']
-        labels += [f'{m}-{i}' for m in ('space', 'nospace') for i in indents]
         return datasets.DatasetInfo(
             features=datasets.Features({
-                "input_ids": datasets.Sequence(datasets.Value("int32")),
-                "words": datasets.Sequence(datasets.Value("string")),
-                "modes": datasets.Sequence(
+                'flat_lines': datasets.Value('string'),
+                'modes': datasets.Sequence(
                     datasets.features.ClassLabel(names=modes)),
-                "indents": datasets.Sequence(
+                'mode_offsets': datasets.Sequence(
+                    datasets.Sequence(datasets.Value('int32'))),
+                'indents': datasets.Sequence(
                     datasets.features.ClassLabel(names=indents)),
-                "base_indent": datasets.Value("int32"),
-                "labels": datasets.Sequence(
-                    datasets.features.ClassLabel(names=labels)),
+                'base_indent': datasets.Value('int32'),
             })
         )
 
@@ -55,20 +51,10 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
 
     def _generate_examples(self, root):
         eid = 0
-        for path in glob.glob(os.path.join(root, "*.tex")):
+        for path in glob.glob(os.path.join(root, '*.tex')):
             logger.info(f'Generating examples from {path!r}...')
             with open(path, 'r', encoding='utf-8') as f:
                 text = f.read()
             for p in self.processor(text):
-                p['labels'] = labels = []
-                indents = []
-                for m, i in zip(p['modes'], p['indents']):
-                    i = min(i, MAX_INDENT)
-                    indents.append(i)
-                    if m == 'off':
-                        labels.append('off')
-                    else:
-                        labels.append(f'{m}-{i}')
-                p['indents'] = indents
                 yield eid, p
                 eid += 1
