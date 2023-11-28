@@ -1,6 +1,6 @@
 import re
 
-from transformers import AutoTokenizer, DataCollatorForTokenClassification
+from transformers import AutoTokenizer
 
 
 class SemBrProcessor(object):
@@ -277,21 +277,6 @@ class SemBrProcessor(object):
 
     def generate(self, paragraphs):
         return '\n\n'.join(self._generate_paragraph(p) for p in paragraphs)
-
-
-class DataCollatorForTokenClassificationWithTruncation(
-    DataCollatorForTokenClassification
-):
-    def __init__(self, tokenizer, max_length=512, **kwargs):
-        super().__init__(tokenizer, **kwargs)
-        self.max_length = max_length
-
-    def __call__(self, features, return_tensors=None):
-        truncated_features = []
-        for f in features:
-            truncated_features.append(
-                {k: v[:self.max_length] for k, v in f.items()})
-        return super().__call__(truncated_features, return_tensors)
 
 
 if __name__ == '__main__':
