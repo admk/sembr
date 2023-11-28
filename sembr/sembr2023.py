@@ -51,7 +51,7 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
 
     def _generate_examples(self, root):
         eid = 0
-        for path in glob.glob(os.path.join(root, '*.tex')):
+        for path in glob.glob(os.path.join(root, '*')):
             logger.info(f'Generating examples from {path!r}...')
             with open(path, 'r', encoding='utf-8') as f:
                 text = f.read()

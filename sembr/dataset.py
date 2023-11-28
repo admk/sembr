@@ -1,4 +1,8 @@
+import os
+import argparse
 import functools
+
+import datasets
 
 
 def _process_examples(
@@ -48,3 +52,22 @@ def process_dataset(dataset, processor, tokenizer, max_indent, label2id):
         process_examples, batched=True, remove_columns=removed_columns)
     dataset = dataset.map(chunk_examples, batched=True)
     return dataset
+
+
+def push_to_hub(hub_user, dataset_name, private):
+    dataset_file = os.path.join(os.path.dirname(__file__), 'sembr2023.py')
+    dataset = datasets.load_dataset(dataset_file)
+    dataset.push_to_hub(f'{hub_user}/{dataset_name}', private=private)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('hub-user', type=str)
+    parser.add_argument('-n', '--dataset-name', type=str, default='sembr2023')
+    parser.add_argument('-p', '--private', action='store_true')
+    return parser.parse_args()
+
+
+if __name__ == '__main__':
+    args = parse_args()
+    push_to_hub(args.hub_user, args.dataset_name, args.private)
