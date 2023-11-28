@@ -62,7 +62,7 @@ def push_to_hub(hub_user, dataset_name, private):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('hub-user', type=str)
+    parser.add_argument('hub_user', type=str)
     parser.add_argument('-n', '--dataset-name', type=str, default='sembr2023')
     parser.add_argument('-p', '--private', action='store_true')
     return parser.parse_args()

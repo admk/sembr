@@ -30,6 +30,7 @@ class DataCollatorForTokenClassificationWithTruncation(
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('model', type=str)
+    parser.add_argument('-dn', '--dataset-name', type=str, default='admko/sembr2023')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-5)
     parser.add_argument('-tb', '--train-batch-size', type=int, default=64)
     parser.add_argument('-eb', '--eval-batch-size', type=int, default=128)
@@ -52,7 +53,7 @@ def parse_args():
 
 
 def init_dataset(args, label2id, max_length):
-    dataset = datasets.load_dataset('admko/sembr2023')
+    dataset = datasets.load_dataset(args.dataset_name)
     processor = SemBrProcessor()
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     processor.prepare_tokenizer(tokenizer)
