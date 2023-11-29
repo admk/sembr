@@ -76,7 +76,9 @@ def rewrap_on_server(text, server, port):
     return results.text
 
 
-def main(args):
+def main(args=None):
+    if args is None:
+        args = parse_args()
     if args.listen:
         tokenizer, model, processor = init(args.model_name)
         return start_server(args.port, tokenizer, model, processor)
