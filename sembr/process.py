@@ -201,9 +201,14 @@ class SemBrProcessor(object):
             new_results.append(tokenized)
         return new_results
 
-    def __call__(self, text):
+    def __call__(self, text, split=True):
+        if split:
+            text = re.split(r'\n(?:\s*\n)+', text)
+        elif isinstance(text, str):
+            raise ValueError(
+                'Text must be a list of strings if split=True.')
         paras = []
-        for p in re.split(r'\n(?:\s*\n)+', text):
+        for p in text:
             if not p.strip():
                 continue
             paras.append(self._process_paragraph(p))
@@ -275,8 +280,11 @@ class SemBrProcessor(object):
             text = text.replace(k, v)
         return text
 
-    def generate(self, paragraphs):
-        return '\n\n'.join(self._generate_paragraph(p) for p in paragraphs)
+    def generate(self, paragraphs, join=True):
+        paragraphs = [self._generate_paragraph(p) for p in paragraphs]
+        if join:
+            return '\n\n'.join(paragraphs)
+        return paragraphs
 
 
 if __name__ == '__main__':
