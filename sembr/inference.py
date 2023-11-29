@@ -82,4 +82,4 @@ def sembr(
     results = inference(
         text, tokenizer, model, processor, predict_func, batch_size,
         overlap_divisor)
-    return processor.generate(results, join=False)
+    return processor.generate(results, join=True)
