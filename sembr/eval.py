@@ -13,9 +13,6 @@ def checkpoints():
     return glob.glob("checkpoints/*/checkpoint-*")
 
 
-def levens
-
-
 def eval_model(dataset, processor, checkpoint, metric):
     model = AutoModelForTokenClassification.from_pretrained(checkpoint)
     model = model.to('cuda')

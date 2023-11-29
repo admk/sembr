@@ -45,9 +45,9 @@ def start_server(port, tokenizer, model, processor):
 
     @app.route('/rewrap', methods=['POST'])
     def rewrap():
-        from .inference import inference
+        from .inference import sembr
         text = request.form['text']
-        results = inference(text, tokenizer, model, processor)
+        results = sembr(text, tokenizer, model, processor)
         return results
 
     app.run(port=port)
@@ -88,9 +88,9 @@ def main(args):
     if check_server(args.server, args.port):
         result = rewrap_on_server(text, args.server, args.port)
     else:
-        from .inference import inference
+        from .inference import sembr
         tokenizer, model, processor = init(args.model_name)
-        result = inference(text, tokenizer, model, processor)
+        result = sembr(text, tokenizer, model, processor)
     if args.output_file is None:
         print(result)
         return

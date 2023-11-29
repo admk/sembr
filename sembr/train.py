@@ -12,21 +12,6 @@ from .dataset import process_dataset
 from .utils import compute_metrics
 
 
-class DataCollatorForTokenClassificationWithTruncation(
-    DataCollatorForTokenClassification
-):
-    def __init__(self, tokenizer, max_length=512, **kwargs):
-        super().__init__(tokenizer, **kwargs)
-        self.max_length = max_length
-
-    def __call__(self, features, return_tensors=None):
-        truncated_features = []
-        for f in features:
-            truncated_features.append(
-                {k: v[:self.max_length] for k, v in f.items()})
-        return super().__call__(truncated_features, return_tensors)
-
-
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('model', type=str)
@@ -50,6 +35,21 @@ def parse_args():
         args.report_to = 'none'
         args.hub_user = None
     return args
+
+
+class DataCollatorForTokenClassificationWithTruncation(
+    DataCollatorForTokenClassification
+):
+    def __init__(self, tokenizer, max_length=512, **kwargs):
+        super().__init__(tokenizer, **kwargs)
+        self.max_length = max_length
+
+    def __call__(self, features, return_tensors=None):
+        truncated_features = []
+        for f in features:
+            truncated_features.append(
+                {k: v[:self.max_length] for k, v in f.items()})
+        return super().__call__(truncated_features, return_tensors)
 
 
 def init_dataset(args, label2id, max_length):
