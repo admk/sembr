@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from tqdm import trange
 
 from transformers import DataCollatorForTokenClassification
@@ -57,29 +58,62 @@ def _format_labels(id2label, preds, attns, results):
     return results
 
 
-def predict_argmax(logits, counts):
+def predict_argmax(logits, counts, tokens_per_line):
     return logits.argmax(dim=2)
+
+
+def zero_runs(a, dim):
+    # Create an array that is 1 where a is 0, and pad each end with an extra 0.
+    pad = np.zeros_like(a.take([0], dim))
+    iszero = np.concatenate([pad, (a == 0).view(np.int8), pad], dim)
+    absdiff = np.abs(np.diff(iszero))
+    # Runs start and end where absdiff is 1.
+    return np.where(absdiff == 1)[0].reshape(-1, 2)
+
+
+def predict_logit_adjustment(logits, counts, tokens_per_line):
+    delta = 1.0
+    logits[:, :, 0] -= delta
+    logits[:, :, 1:] += delta / logits.shape[2]
+    return logits.argmax(dim=2)
+
+
+def predict_breaks_first(logits, counts, tokens_per_line):
+    delta = 0.0
+    off_logits = logits[:, :, 0] - delta
+    break_logits = logits[:, :, 1:] + delta / logits.shape[2]
+    breaks = (break_logits > off_logits.unsqueeze(-1)).any(2)
+    break_preds = 1 + break_logits.argmax(dim=2)
+    return torch.where(breaks, break_preds, torch.zeros_like(break_preds))
+
+
+PREDICT_FUNC_MAP = {
+    'argmax': predict_argmax,
+    'breaks_first': predict_breaks_first,
+    'logit_adjustment': predict_logit_adjustment,
+}
 
 
 def inference(
     text, tokenizer, model, processor,
-    predict_func=predict_argmax, batch_size=8, overlap_divisor=8
+    predict_func='argmax', tokens_per_line=10,
+    batch_size=8, overlap_divisor=8,
 ):
-    collator = DataCollatorForTokenClassification(
-        tokenizer, padding='longest')
+    collator = DataCollatorForTokenClassification(tokenizer, padding='longest')
     results = processor(text, split=isinstance(text, str))
     results = processor.tokenize_with_modes(tokenizer, results)
     logits, counts = _tiled_inference(
         model, collator, results, batch_size, overlap_divisor)
-    preds = predict_func(logits, counts)
+    preds = PREDICT_FUNC_MAP[predict_func](logits, counts, tokens_per_line)
     return _format_labels(model.config.id2label, preds, counts, results)
 
 
 def sembr(
     text, tokenizer, model, processor,
-    predict_func=predict_argmax, batch_size=8, overlap_divisor=8
+    predict_func='argmax', tokens_per_line=10,
+    batch_size=8, overlap_divisor=8,
 ):
     results = inference(
-        text, tokenizer, model, processor, predict_func, batch_size,
-        overlap_divisor)
+        text, tokenizer, model, processor, predict_func, tokens_per_line,
+        batch_size, overlap_divisor)
     return processor.generate(results, join=True)

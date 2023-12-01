@@ -4,7 +4,6 @@ import datasets
 import evaluate
 from transformers import AutoModelForTokenClassification, AutoTokenizer
 
-from .dataset import process_dataset
 from .inference import inference
 from .process import SemBrProcessor
 

@@ -54,20 +54,40 @@ def process_dataset(dataset, processor, tokenizer, max_indent, label2id):
     return dataset
 
 
-def push_to_hub(hub_user, dataset_name, private):
+def init_dataset():
     dataset_file = os.path.join(os.path.dirname(__file__), 'sembr2023.py')
-    dataset = datasets.load_dataset(dataset_file)
-    dataset.push_to_hub(f'{hub_user}/{dataset_name}', private=private)
+    return datasets.load_dataset(dataset_file)
+
+def push_to_hub(dataset, hub_user, dataset_name, private):
+    hub_path = f'{hub_user}/{dataset_name}'
+    print(f'Pushing dataset to {hub_path}...')
+    dataset.push_to_hub(hub_path, private=private)
+
+
+def save_to_disk(dataset, save_dir, dataset_name):
+    save_path = os.path.join(save_dir, dataset_name)
+    print(f'Saving dataset to {save_path}...')
+    dataset.save_to_disk(save_path)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('hub_user', type=str)
     parser.add_argument('-n', '--dataset-name', type=str, default='sembr2023')
+    parser.add_argument('-s', '--save-dir', type=str, default='data')
+    parser.add_argument('-u', '--hub-user', type=str, default=None)
     parser.add_argument('-p', '--private', action='store_true')
     return parser.parse_args()
 
 
+def main(args=None):
+    if args is None:
+        args = parse_args()
+    dataset = init_dataset()
+    if args.save_dir is not None:
+        save_to_disk(dataset, args.save_dir, args.dataset_name)
+    if args.hub_user is not None:
+        push_to_hub(dataset, args.hub_user, args.dataset_name, args.private)
+
+
 if __name__ == '__main__':
-    args = parse_args()
-    push_to_hub(args.hub_user, args.dataset_name, args.private)
+    main()

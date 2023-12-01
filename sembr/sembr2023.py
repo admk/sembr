@@ -43,10 +43,10 @@ class SemBr2023(datasets.GeneratorBasedBuilder):
         return [
             datasets.SplitGenerator(
                 name=datasets.Split.TRAIN,
-                gen_kwargs={'root': './data/train/'}),
+                gen_kwargs={'root': './data/raw/train/'}),
             datasets.SplitGenerator(
                 name=datasets.Split.TEST,
-                gen_kwargs={'root': './data/test/'}),
+                gen_kwargs={'root': './data/raw/test/'}),
         ]
 
     def _generate_examples(self, root):
