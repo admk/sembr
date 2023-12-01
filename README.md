@@ -234,3 +234,4 @@ the memory usage is about 1.70 GB.
 * [ ] Improve inference speed.
 * [ ] Reduce memory usage.
 * [ ] Improve indent level prediction.
+* [ ] Inference queue.
