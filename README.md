@@ -10,6 +10,9 @@
 ## What is SemBr?
 
 SemBr is a tool
+powered by [
+    Transformer models
+](https://huggingface.co/learn/nlp-course/chapter1/4)
 that breaks lines in a text file
 at semantic boundaries.
 
