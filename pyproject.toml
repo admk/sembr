@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sembr"
+version = "0.0.1"
+authors = [
+  { name="admk" },
+]
+description = "A semantic linebreaker powered by transformers"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "transformers" ,
+    "torch" ,
+    "numpy" ,
+    "tqdm" ,
+    "requests" ,
+    "flask" ,
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+sembr = "sembr.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/admk/sembr"
+Issues = "https://github.com/admk/sembr/issues"

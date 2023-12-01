@@ -3,4 +3,5 @@ data/
 wandb/
 checkpoints/
 *.egg-info/
+dist/
 .DS_Store
