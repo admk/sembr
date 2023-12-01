@@ -1,8 +1,9 @@
 # Semantic Line Breaker (SemBr)
 
+[![GitHub](https://img.shields.io/github/license/admk/sembr)](LICENSE)
 [![python](https://img.shields.io/badge/Python-3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![pytorch](https://img.shields.io/badge/PyTorch-2.1.0-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
-![PyPI](https://badge.fury.io/py/erichek.svg)
+[![PyPI](https://badge.fury.io/py/sembr.svg)](https://pypi.org/project/sembr)
 
 ```
 > When writing text
@@ -13,9 +14,8 @@
 
 ## What is SemBr?
 
-SemBr is a tool powered by [
-    Transformer models
-](https://huggingface.co/learn/nlp-course/chapter1/4)
+SemBr is a command-line tool
+powered by [Transformer][transformers1] [models][transformers2]
 that breaks lines in a text file at semantic boundaries.
 
 ### Installation
@@ -43,13 +43,14 @@ run the following command in your terminal:
 ```shell
 sembr -i <input_file> -o <output_file>
 ```
-where `<input_file>` is the path to the input file.
+where `<input_file>` and `<output_file>`
+are the paths to the input and output files respectively.
 
 On the first run,
 it will download the SemBr model
 and cache it in `~/.cache/huggingface`.
 Subsequent runs will check for updates
-and use the cached model if it is up to date.
+and use the cached model if it is up-to-date.
 
 Alternatively,
 you can pipe the input into `sembr`,
@@ -62,31 +63,43 @@ with clipboard managers, for instance, on a Mac:
 ```shell
 pbpaste | sembr | pbcopy
 ```
+Or on Linux:
+```shell
+xclip -o | sembr | xclip -i
+```
 
 Additionally,
 you can specify the following options
 to customize the behavior of SemBr:
 
-* `-m <model_name>`: The name of the Hugging Face model to use.
-  The default is `admko/sembr2023-bert-small`.
-* `-l`: Serves the SemBr API on a local server.
-  Each instance of `sembr` run
-  will detect if the API is accessible,
-  and if not it will run the model on its own.
-  This option is useful
-  to avoid the time taken to initialize the model
-  by keeping it in memory in a separate process.
-* `-p <port>`: The port to serve the SemBr API on.
-  The default is `8384`.
-* `-s <ip>`: The IP address to serve the SemBr API on.
-  The default is `127.0.0.1`.
+* `-m <model_name>`:
+  The name of the Hugging Face model to use.
+  - The default is
+    [`admko/sembr2023-bert-small`][sembr-bert-small].
+  - To use it offline,
+    you can download the model from Hugging Face,
+    and then specify the path to the model directory,
+    or prepend `TRANSFORMERS_OFFLINE=1` to the command
+    to use the cached model.
+* `-l`:
+  Serves the SemBr API on a local server.
+  - Each instance of `sembr` run
+    will detect if the API is accessible,
+    and if not it will run the model on its own.
+  - This option is useful
+    to avoid the time taken to initialize the model
+    by keeping it in memory in a separate process.
+* `-p <port>`:
+  The port to serve the SemBr API on.
+  - The default is `8384`.
+* `-s <ip>`:
+  The IP address to serve the SemBr API on.
+  - The default is `127.0.0.1`.
 
 ## What are Semantic Line Breaks?
 
-[Semantic Line Breaks](https://sembr.org)
-or [
-    Semantic Linefeeds
-](https://rhodesmill.org/brandon/2012/one-sentence-per-line/)
+[Semantic Line Breaks][sembr]
+or [Semantic Linefeeds][semlf]
 describe a set of conventions
 for using insensitive vertical whitespace
 to structure prose along semantic boundaries.
@@ -129,30 +142,34 @@ Rule-based heuristics do not work well
 with the actual semantic structure of the text,
 often leading to incorrect semantic boundaries.
 Moreover,
-semantic boundaries are hierarchical and nested,
+these boundaries are hierarchical and nested,
 and a rule-based approach
 cannot capture this structure.
 A semantic line break
 may occur after a dependent clause,
-but not all clauses should be broken into lines.
+but where to break clauses into lines
+is challenging to determine
+without syntactic and semantic reasoning capabilities.
 For examples:
 
 * A rule that breaks lines at punctuation marks
-  will not work well with sentences that contain periods
+  will not work well with sentences
+  that contain periods
   in abbreviations or mathematical expressions.
 
-* For example,
+* Syntactic or semantic structures
+  are not always easy to determine.
   "I like to eat apples and oranges
   because they are healthy."
   should be broken into lines as follows:
   ```
-  I like to eat apples and oranges
-  because they are healthy.
+  > I like to eat apples and oranges
+  > because they are healthy.
   ```
   rather than:
   ```
-  I like to eat apples
-  and oranges because they are healthy.
+  > I like to eat apples
+  > and oranges because they are healthy.
   ```
 
 For this reason,
@@ -165,6 +182,7 @@ to predict line breaks at semantic boundaries.
 
 SemBr uses a Transformer model
 to predict line breaks at semantic boundaries.
+
 A small dataset of text with semantic line breaks
 was created from my existing LaTeX documents.
 The dataset was split into training
@@ -197,32 +215,32 @@ We save the model with the best F1 score
 on correctly predicting the existence of a line break
 on the test set.
 The finetuning logs for the following models
-can be found on this [WandB](https://wandb.ai/admko/sembr2023) report:
+can be found on this [WandB][wandb] report:
 
 * `distilbert-base-uncased`
-  [[Pretrained]](https://huggingface.co/distilbert-base-uncased)
-  [[Finetuned]](https://huggingface.co/admko/sembr2023-distilbert-base-uncased)
+  [[Pretrained]][distilbert-bu]
+  [[Finetuned]][sembr-distilbert-bu]
 * `distilbert-base-cased`
-  [[Pretrained]](https://huggingface.co/distilbert-base-cased)
-  [[Finetuned]](https://huggingface.co/admko/sembr2023-distilbert-base-cased)
+  [[Pretrained]][distilbert-bc]
+  [[Finetuned]][sembr-distilbert-bc]
 * `distilbert-base-uncased-finetuned-sst-2-english`
-  [[Pretrained]](https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english)
-  [[Finetuned]](https://huggingface.co/admko/sembr2023-distilbert-base-uncased-finetuned-sst-2-english)
+  [[Pretrained]][distilbert-bufs2e]
+  [[Finetuned]][sembr-distilbert-bufs2e]
 * `prajjwal1/bert-tiny`
-  [[Pretrained]](https://huggingface.co/prajjwal1/bert-tiny)
-  [[Finetuned]](https://huggingface.co/admko/sembr2023-bert-tiny)
+  [[Pretrained]][bert-tiny]
+  [[Finetuned]][sembr-bert-tiny]
 * `prajjwal1/bert-mini`
-  [[Pretrained]](https://huggingface.co/prajjwal1/bert-mini)
-  [[Finetuned]](https://huggingface.co/admko/sembr2023-bert-mini)
+  [[Pretrained]][bert-mini]
+  [[Finetuned]][sembr-bert-mini]
 * `prajjwal1/bert-small`
-  [[Pretrained]](https://huggingface.co/prajjwal1/bert-small)
-  [[Finetuned]](https://huggingface.co/admko/sembr2023-bert-small)
+  [[Pretrained]][bert-small]
+  [[Finetuned]][sembr-bert-small]
 
 
 ## Performance
 
 Current inference speed on an M2 Macbook Pro
-is about 1,500 characters per second
+is about 850 words per second
 on `bert-small` with the default options,
 the memory usage is about 1.70 GB.
 
@@ -239,3 +257,25 @@ the memory usage is about 1.70 GB.
 * [ ] Reduce memory usage.
 * [ ] Improve indent level prediction.
 * [ ] Inference queue.
+
+
+[transformers1]: https://huggingface.co/learn/nlp-course/chapter1/4
+[transformers2]: https://lilianweng.github.io/posts/2020-04-07-the-transformer-family/
+
+[sembr]: https://sembr.org
+[semlf]: https://rhodesmill.org/brandon/2012/one-sentence-per-line
+
+[wandb]: https://wandb.ai/admko/sembr2023
+
+[distilbert-bu]: https://huggingface.co/distilbert-base-uncased
+[distilbert-bc]: https://huggingface.co/distilbert-base-cased
+[distilbert-bufs2e]: https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english
+[bert-tiny]: https://huggingface.co/prajjwal1/bert-tiny
+[bert-mini]: https://huggingface.co/prajjwal1/bert-mini
+[bert-small]: https://huggingface.co/prajjwal1/bert-small
+[sembr-distilbert-bu]: https://huggingface.co/admko/sembr2023-distilbert-base-uncased
+[sembr-distilbert-bc]: https://huggingface.co/admko/sembr2023-distilbert-base-cased
+[sembr-distilbert-bufs2e]: https://huggingface.co/admko/sembr2023-distilbert-base-uncased-finetuned-sst-2-english
+[sembr-bert-tiny]: https://huggingface.co/admko/sembr2023-bert-tiny
+[sembr-bert-mini]: https://huggingface.co/admko/sembr2023-bert-mini
+[sembr-bert-small]: https://huggingface.co/admko/sembr2023-bert-small
