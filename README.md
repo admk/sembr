@@ -1,5 +1,9 @@
 # Semantic Line Breaker (SemBr)
 
+[![python](https://img.shields.io/badge/Python-3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![pytorch](https://img.shields.io/badge/PyTorch-2.1.0-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
+![PyPI](https://badge.fury.io/py/erichek.svg)
+
 ```
 > When writing text
 > with a compatible markup language,
@@ -9,20 +13,16 @@
 
 ## What is SemBr?
 
-SemBr is a tool
-powered by [
+SemBr is a tool powered by [
     Transformer models
 ](https://huggingface.co/learn/nlp-course/chapter1/4)
-that breaks lines in a text file
-at semantic boundaries.
+that breaks lines in a text file at semantic boundaries.
 
 ### Installation
 
-SemBr is available as a Python package
-on PyPI.
+SemBr is available as a Python package on PyPI.
 To install it,
-simply run the following command
-in your terminal,
+simply run the following command in your terminal,
 assuming that you have Python 3.10 or later installed:
 ```shell
 pip install sembr
@@ -39,25 +39,26 @@ to accelerate inference.
 ### Usage
 
 To use SemBr,
-run the following command
-in your terminal:
+run the following command in your terminal:
 ```shell
 sembr -i <input_file> -o <output_file>
 ```
 where `<input_file>` is the path to the input file.
 
+On the first run,
+it will download the SemBr model
+and cache it in `~/.cache/huggingface`.
+Subsequent runs will check for updates
+and use the cached model if it is up to date.
+
 Alternatively,
-you can pipe the input
-into `sembr`,
-and the output can also be printed
-to the terminal:
+you can pipe the input into `sembr`,
+and the output can also be printed to the terminal:
 ```shell
 cat <input_file> | sembr
 ```
-This is especially useful
-if you want to use SemBr
-with clipboard managers,
-for instance, on a Mac:
+This is especially useful if you want to use SemBr
+with clipboard managers, for instance, on a Mac:
 ```shell
 pbpaste | sembr | pbcopy
 ```
@@ -65,6 +66,7 @@ pbpaste | sembr | pbcopy
 Additionally,
 you can specify the following options
 to customize the behavior of SemBr:
+
 * `-m <model_name>`: The name of the Hugging Face model to use.
   The default is `admko/sembr2023-bert-small`.
 * `-l`: Serves the SemBr API on a local server.
@@ -119,8 +121,7 @@ Converting existing text not written
 with semantic line breaks
 takes a long time to do it manually,
 and it is surprisingly difficult
-to do it automatically
-with rule-based methods.
+to do it automatically with rule-based methods.
 
 ### Challenges of rule-based methods
 
@@ -137,9 +138,8 @@ but not all clauses should be broken into lines.
 For examples:
 
 * A rule that breaks lines at punctuation marks
-  will not work well
-  with sentences that contain
-  periods in abbreviations or mathematical expressions.
+  will not work well with sentences that contain periods
+  in abbreviations or mathematical expressions.
 
 * For example,
   "I like to eat apples and oranges
@@ -164,11 +164,9 @@ to predict line breaks at semantic boundaries.
 ## How does SemBr work?
 
 SemBr uses a Transformer model
-to predict line breaks
-at semantic boundaries.
-A small dataset of text
-with semantic line breaks was created
-from my existing LaTeX documents.
+to predict line breaks at semantic boundaries.
+A small dataset of text with semantic line breaks
+was created from my existing LaTeX documents.
 The dataset was split into training
 (46,295 lines, 170,681 words and 1,492,952 characters)
 and test
@@ -178,15 +176,11 @@ datasets.
 The data was prepared
 by extracting line breaks and indent levels
 from the files,
-and then converting the files
-into strings of paragraphs
-with line breaks removed.
-The data can then be tokenized
-using the tokenizer
-and converted into a dataset
-with tokens,
-where each token has a label
-denoting:
+and then converting the result
+into strings of paragraphs with line breaks removed.
+The data can then be tokenized using the tokenizer
+and converted into a dataset with tokens,
+where each token has a label denoting:
 * no line break (label = 0), or
 * a line break
   that adds a space in LaTeX documents
@@ -198,41 +192,48 @@ denoting:
 The pretrained masked language model
 is then finetuned as a token classifier
 on the training dataset
-to predict the labels
-of the tokens.
-We save the model
-with the best F1 score
-on correctly predicting line breaks of any kind
+to predict the labels of the tokens.
+We save the model with the best F1 score
+on correctly predicting the existence of a line break
 on the test set.
-The finetuning logs
-for all models including the following
-can be found
-on this [WandB](https://wandb.ai/admko/sembr2023) report:
-* [`distilbert-base-uncased`](https://huggingface.co/distilbert-base-uncased).
-* [`distilbert-base-cased`](https://huggingface.co/distilbert-base-cased).
-* [`distilbert-base-uncased-finetuned-sst-2-english`](https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english).
-* [`prajjwal1/bert-tiny`](https://huggingface.co/prajjwal1/bert-tiny).
-* [`prajjwal1/bert-small`](https://huggingface.co/prajjwal1/bert-small).
+The finetuning logs for the following models
+can be found on this [WandB](https://wandb.ai/admko/sembr2023) report:
+
+* `distilbert-base-uncased`
+  [[Pretrained]](https://huggingface.co/distilbert-base-uncased)
+  [[Finetuned]](https://huggingface.co/admko/sembr2023-distilbert-base-uncased)
+* `distilbert-base-cased`
+  [[Pretrained]](https://huggingface.co/distilbert-base-cased)
+  [[Finetuned]](https://huggingface.co/admko/sembr2023-distilbert-base-cased)
+* `distilbert-base-uncased-finetuned-sst-2-english`
+  [[Pretrained]](https://huggingface.co/distilbert-base-uncased-finetuned-sst-2-english)
+  [[Finetuned]](https://huggingface.co/admko/sembr2023-distilbert-base-uncased-finetuned-sst-2-english)
+* `prajjwal1/bert-tiny`
+  [[Pretrained]](https://huggingface.co/prajjwal1/bert-tiny)
+  [[Finetuned]](https://huggingface.co/admko/sembr2023-bert-tiny)
+* `prajjwal1/bert-mini`
+  [[Pretrained]](https://huggingface.co/prajjwal1/bert-mini)
+  [[Finetuned]](https://huggingface.co/admko/sembr2023-bert-mini)
+* `prajjwal1/bert-small`
+  [[Pretrained]](https://huggingface.co/prajjwal1/bert-small)
+  [[Finetuned]](https://huggingface.co/admko/sembr2023-bert-small)
 
 
 ## Performance
 
-Current inference speed
-on an M2 Macbook Pro
+Current inference speed on an M2 Macbook Pro
 is about 1,500 characters per second
-on `bert-small`,
+on `bert-small` with the default options,
 the memory usage is about 1.70 GB.
 
 
 ## Improvements and TODOs
 
 * [ ] Support natural languages other than English.
-* [ ] Support other markup languages
-      such as Markdown.
-* [ ] Some lines are too long
-      without a line break.
-      The inference algorithm
-      can be improved to penalize long lines.
+* [ ] Support other markup languages such as Markdown.
+* [ ] Some lines are too long without a line break.
+      The inference algorithm can be improved
+      to penalize long lines.
 * [ ] Performance benchmarking.
 * [ ] Improve inference speed.
 * [ ] Reduce memory usage.
