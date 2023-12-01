@@ -198,14 +198,19 @@ and then converting the result
 into strings of paragraphs with line breaks removed.
 The data can then be tokenized using the tokenizer
 and converted into a dataset with tokens,
-where each token has a label denoting:
-* no line break (label = 0), or
-* a line break
-  that adds a space in LaTeX documents
-  at the token with an indent level
-  (label in [0, 1, 2, ..., MAX_INDENT]), or
-* a line break that adds no space
-  (label in [MAX_INDENT + 1, MAX_INDENT + 2, ..., 2 * MAX_INDENT]).
+where each token has a label
+denoting if there is line break before it,
+and the indent level of the token.
+
+For LaTeX documents,
+there are two types of line breaks:
+one with a normal line break
+that adds implicit spacing (e.g. `line a⏎line b`)
+and one with no spacing (e.g. `line a%⏎line b`).
+The data processor
+also tries to preserve the LaTeX syntax of the text
+by adding and removing comment symbols (`%`),
+if necessary.
 
 The pretrained masked language model
 is then finetuned as a token classifier
@@ -244,6 +249,18 @@ is about 850 words per second
 on `bert-small` with the default options,
 the memory usage is about 1.70 GB.
 
+The link breaking accuracy is difficult to measure,
+and the locations of line breaks
+could also be subjective.
+On the test set,
+the per-token line break accuracy
+of the models are >95%,
+with ~80% F1 scores.
+Because of the sparse nature of line breaks,
+the accuracy is not a good metric
+to measure the performance of the model,
+and I used the F1 score instead
+to save best models.
 
 ## Improvements and TODOs
 
@@ -252,11 +269,25 @@ the memory usage is about 1.70 GB.
 * [ ] Some lines are too long without a line break.
       The inference algorithm can be improved
       to penalize long lines.
-* [ ] Performance benchmarking.
+* [ ] Performance and accuracy benchmarking,
+      and comparisons with related works.
 * [ ] Improve inference speed.
 * [ ] Reduce memory usage.
 * [ ] Improve indent level prediction.
 * [ ] Inference queue.
+
+## Related Projects and References
+
+Sentence splitting:
+* https://code.google.com/archive/p/splitta/
+* https://en.wikipedia.org/wiki/Sentence_boundary_disambiguation
+* https://github.com/nipunsadvilkar/pySBD
+* https://www.nltk.org/api/nltk.tokenize.sent_tokenize.html
+
+Semantic line breaking:
+* https://github.com/waldyrious/semantic-linebreaker
+* https://github.com/bobheadxi/readable ([blog post](https://bobheadxi.dev/semantic-line-breaks/))
+* https://github.com/chrisgrieser/obsidian-sembr
 
 
 [transformers1]: https://huggingface.co/learn/nlp-course/chapter1/4
