@@ -12,12 +12,12 @@ description = "A semantic linebreaker powered by transformers"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "transformers" ,
-    "torch" ,
-    "numpy" ,
-    "tqdm" ,
-    "requests" ,
-    "flask" ,
+    "transformers",
+    "torch",
+    "numpy",
+    "tqdm",
+    "requests",
+    "flask",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -31,3 +31,7 @@ sembr = "sembr.cli:main"
 [project.urls]
 Homepage = "https://github.com/admk/sembr"
 Issues = "https://github.com/admk/sembr/issues"
+
+[tool.setuptools.packages.find]
+include = ["sembr"]
+exclude = ["data*", "tests*"]
