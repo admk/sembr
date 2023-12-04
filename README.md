@@ -307,7 +307,7 @@ Semantic line breaking:
 [sembr]: https://sembr.org
 [semlf]: https://rhodesmill.org/brandon/2012/one-sentence-per-line
 
-[wandb]: https://wandb.ai/admko/sembr2023
+[wandb]: https://api.wandb.ai/links/admk/efvui9f4
 
 [distilbert-bu]: https://huggingface.co/distilbert-base-uncased
 [distilbert-bc]: https://huggingface.co/distilbert-base-cased
