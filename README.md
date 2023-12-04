@@ -12,6 +12,7 @@
 > after each substantial unit of thought.
 ```
 
+
 ## What is SemBr?
 
 SemBr is a command-line tool
@@ -20,7 +21,7 @@ that breaks lines in a text file at semantic boundaries.
 
 ### Installation
 
-SemBr is available as a Python package on PyPI.
+SemBr is available as a [Python package on PyPI][pypi].
 To install it,
 simply run the following command in your terminal,
 assuming that you have Python 3.10 or later installed:
@@ -96,6 +97,7 @@ to customize the behavior of SemBr:
   The IP address to serve the SemBr API on.
   - The default is `127.0.0.1`.
 
+
 ## What are Semantic Line Breaks?
 
 [Semantic Line Breaks][sembr]
@@ -103,6 +105,7 @@ or [Semantic Linefeeds][semlf]
 describe a set of conventions
 for using insensitive vertical whitespace
 to structure prose along semantic boundaries.
+
 
 ## Why use Semantic Line Breaks?
 
@@ -127,6 +130,7 @@ Semantic Line Breaks has the following advantages:
   are invisible to readers.
   The final rendered output
   shows no changes to the source text.
+
 
 ## Why SemBr?
 
@@ -262,6 +266,7 @@ to measure the performance of the model,
 and I used the F1 score instead
 to save best models.
 
+
 ## Improvements and TODOs
 
 * [ ] Support natural languages other than English.
@@ -275,6 +280,8 @@ to save best models.
 * [ ] Reduce memory usage.
 * [ ] Improve indent level prediction.
 * [ ] Inference queue.
+* [ ] VSCode extension.
+
 
 ## Related Projects and References
 
@@ -285,13 +292,17 @@ Sentence splitting:
 * https://www.nltk.org/api/nltk.tokenize.sent_tokenize.html
 
 Semantic line breaking:
+* https://github.com/sembr/specification
 * https://github.com/waldyrious/semantic-linebreaker
 * https://github.com/bobheadxi/readable ([blog post](https://bobheadxi.dev/semantic-line-breaks/))
 * https://github.com/chrisgrieser/obsidian-sembr
+* https://github.com/cllns/semantic_linefeeds
 
 
 [transformers1]: https://huggingface.co/learn/nlp-course/chapter1/4
 [transformers2]: https://lilianweng.github.io/posts/2020-04-07-the-transformer-family/
+
+[pypi]: https://pypi.org/project/sembr
 
 [sembr]: https://sembr.org
 [semlf]: https://rhodesmill.org/brandon/2012/one-sentence-per-line

@@ -31,7 +31,7 @@ def parse_args():
 
 def init(model_name):
     import torch
-    from transformers import (AutoTokenizer, AutoModelForTokenClassification)
+    from transformers import AutoTokenizer, AutoModelForTokenClassification
     from .process import SemBrProcessor
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = AutoModelForTokenClassification.from_pretrained(model_name)
@@ -42,7 +42,6 @@ def init(model_name):
         model = model.to('mps')
     processor = SemBrProcessor()
     return tokenizer, model, processor
-
 
 
 def start_server(port, tokenizer, model, processor):
@@ -56,7 +55,10 @@ def start_server(port, tokenizer, model, processor):
 
     @app.route('/check')
     def check():
-        return {**base_rv, 'status': 'success'}
+        return {
+            'status': 'success',
+            **base_rv,
+        }
 
     @app.route('/rewrap', methods=['POST'])
     def rewrap():
@@ -72,14 +74,16 @@ def start_server(port, tokenizer, model, processor):
         try:
             results = sembr(text, tokenizer, model, processor, **kwargs)
             return {
-                **base_rv,
                 'status': 'success',
-                'text': results
+                **base_rv,
+                **kwargs,
+                'text': results,
             }
         except Exception as e:
             return {
-                **base_rv,
                 'status': 'error',
+                **base_rv,
+                **kwargs,
                 'error': str(e),
                 'traceback': traceback.format_exc(),
             }
