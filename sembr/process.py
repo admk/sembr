@@ -9,7 +9,7 @@ class SemBrProcessor(object):
         self.spaces = spaces
         self.replace_tokens = {
             # r'\n(?:\s*\n)+': '[par]',
-            # '\t': '[indent]',
+            '\t': ' ' * self.spaces,
             # ' ' * self.spaces: '[indent]',
             '\\%': '[percent]',
             '\n': '[newline]',
@@ -36,7 +36,7 @@ class SemBrProcessor(object):
                 if c == ' ':
                     indent += 1
                 elif c == '\t':
-                    indent += self.spaces
+                    raise ValueError('Tabs are not allowed.')
                 else:
                     break
             indent_level = int(indent / self.spaces)
