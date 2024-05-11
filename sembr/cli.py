@@ -91,48 +91,42 @@ def start_server(port, tokenizer, model, processor):
     app.run(port=port)
 
 
-def check_server(server, port):
+def _fetch(server, port, endpoint, method='get', data=None, timeout=None):
     import requests
     from requests.exceptions import ConnectionError, ReadTimeout
+    try:
+        results = getattr(requests, method.lower())(
+            f'http://{server}:{port}/{endpoint}', data=data, timeout=timeout)
+    except (ConnectionError, ReadTimeout) as e:
+        raise RuntimeError(f'Connection Error: {e}')
+    if results.status_code != 200:
+        raise RuntimeError(
+            f'Connection Error: {results.status_code}: {results.text}')
+    data = results.json()
+    if data['status'] != 'success':
+        raise RuntimeError(
+            f'Status: {data["status"]}\n'
+            f'Exception: {data["error"]}\n'
+            f'Traceback: {data.get("traceback")}')
+    return data
+
+
+def check_server(server, port):
     if not server:
         return False
     try:
-        response = requests.get(f'http://{server}:{port}/check', timeout=0.3)
-    except (ConnectionError, ReadTimeout) as e:
-        return False
-    if response.status_code != 200:
-        return False
-    if response.json()['status'] != 'success':
+        _fetch(server, port, 'check', timeout=0.3)
+    except RuntimeError:
         return False
     return True
 
 
 def rewrap_on_server(text, server, port, kwargs):
-    import requests
-    data = {
-        'text': text,
-        **kwargs,
-    }
-    try:
-        results = requests.post(
-            f'http://{server}:{port}/rewrap', data=data)
-    except Exception as e:
-        raise ValueError(f'Connection Error: {e}')
-    if results.status_code != 200:
-        raise ValueError(
-            f'Connection Error: {results.status_code}: {results.text}')
-    data = results.json()
-    if data['status'] != 'success':
-        raise ValueError(
-            f'Status: {data["status"]}\n'
-            f'Exception: {data["error"]}\n'
-            f'{data["traceback"]}')
-    return data['text']
+    data = {'text': text, **kwargs}
+    response = _fetch(server, port, 'rewrap', 'post', data)
+    return response['text']
 
 
-def main(args=None):
-    if args is None:
-        args = parse_args()
     if args.listen:
         tokenizer, model, processor = init(args.model_name)
         return start_server(args.port, tokenizer, model, processor)
