@@ -6,27 +6,31 @@ import traceback
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
+STDIN_TTY = os.isatty(sys.stdin.fileno())
+STDOUT_TTY = os.isatty(sys.stdout.fileno())
+STDERR_TTY = os.isatty(sys.stderr.fileno())
 
-def parse_args():
+
+def cli_parser():
     import argparse
-    parser = argparse.ArgumentParser(
+    p = argparse.ArgumentParser(
         description='SemBr: Rewrap text with semantic breaks.')
     model_name = 'admko/sembr2023-bert-small'
-    parser.add_argument('-m', '--model-name', type=str, default=model_name)
-    parser.add_argument('-i', '--input-file', type=str, default=None)
-    parser.add_argument('-o', '--output-file', type=str, default=None)
-    parser.add_argument('-w', '--words-per-line', type=int, default=10)
-    parser.add_argument('-b', '--batch-size', type=int, default=8)
-    parser.add_argument('-d', '--overlap-divisor', type=int, default=8)
-    parser.add_argument(
+    p.add_argument('-m', '--model-name', type=str, default=model_name)
+    p.add_argument('-i', '--input-file', type=str, default=None)
+    p.add_argument('-o', '--output-file', type=str, default=None)
+    p.add_argument('-w', '--words-per-line', type=int, default=10)
+    p.add_argument('-b', '--batch-size', type=int, default=8)
+    p.add_argument('-d', '--overlap-divisor', type=int, default=8)
+    p.add_argument(
         '-f', '--predict-func', type=str,
         choices=['argmax', 'breaks_first', 'logit_adjustment'],
         default='argmax')
-    parser.add_argument('-t', '--tokens-per-line', type=int, default=10)
-    parser.add_argument('-s', '--server', type=str, default='127.0.0.1')
-    parser.add_argument('-l', '--listen', action='store_true')
-    parser.add_argument('-p', '--port', type=int, default=8384)
-    return parser.parse_args()
+    p.add_argument('-t', '--tokens-per-line', type=int, default=10)
+    p.add_argument('-s', '--server', type=str, default='127.0.0.1')
+    p.add_argument('-l', '--listen', action='store_true')
+    p.add_argument('-p', '--port', type=int, default=8384)
+    return p
 
 
 def init(model_name):
@@ -127,14 +131,21 @@ def rewrap_on_server(text, server, port, kwargs):
     return response['text']
 
 
+def main():
+    parser = cli_parser()
+    args = parser.parse_args()
     if args.listen:
         tokenizer, model, processor = init(args.model_name)
         return start_server(args.port, tokenizer, model, processor)
     if args.input_file is not None:
         with open(args.input_file, 'r', encoding='utf-8') as f:
             text = f.read()
-    else:
+    elif not STDIN_TTY:
         text = sys.stdin.read()
+    else:
+        parser.print_help()
+        print('\nNo input file or stdin text provided.')
+        return
     kwargs = {
         'batch_size': args.batch_size,
         'predict_func': args.predict_func,
@@ -155,4 +166,4 @@ def rewrap_on_server(text, server, port, kwargs):
 
 
 if __name__ == '__main__':
-    main(parse_args())
+    main()
