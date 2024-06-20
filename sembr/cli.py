@@ -30,20 +30,34 @@ def cli_parser():
     p.add_argument('-s', '--server', type=str, default='127.0.0.1')
     p.add_argument('-l', '--listen', action='store_true')
     p.add_argument('-p', '--port', type=int, default=8384)
+    p.add_argument('--bits', type=int, choices=[4, 8], default=None)
+    p.add_argument('--dtype', type=str, default=None)
     return p
 
 
-def init(model_name):
+def init(model_name, bits=None, dtype=None):
     import torch
-    from transformers import AutoTokenizer, AutoModelForTokenClassification
+    from transformers import (
+        AutoTokenizer, AutoModelForTokenClassification, BitsAndBytesConfig)
     from .process import SemBrProcessor
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForTokenClassification.from_pretrained(model_name)
-    model.eval()
+    dtype = getattr(torch, dtype) if dtype is not None else torch.float32
+    kwargs = {}
     if torch.cuda.is_available():
-        model = model.to('cuda')
+        if bits == 4:
+            kwargs['quantization_config'] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_compute_dtype=dtype)
+        elif bits == 8:
+            kwargs['quantization_config'] = BitsAndBytesConfig(
+                load_in_8bit=True)
+        kwargs['device_map'] = 'cuda'
     elif torch.backends.mps.is_available():
-        model = model.to('mps')
+        if bits in [4, 8]:
+            raise RuntimeError('MPS does not support quantization.')
+        kwargs['device_map'] = 'mps'
+    model = AutoModelForTokenClassification.from_pretrained(
+        model_name, torch_dtype=dtype, **kwargs)
+    model.eval()
     processor = SemBrProcessor()
     return tokenizer, model, processor
 
