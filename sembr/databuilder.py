@@ -1,5 +1,6 @@
 import os
 import glob
+import datetime
 
 import datasets
 
@@ -11,12 +12,12 @@ logger = datasets.logging.get_logger(__name__)
 MAX_INDENT = 10
 
 
-class SemBr2023(datasets.GeneratorBasedBuilder):
+class SemBrDataBuilder(datasets.GeneratorBasedBuilder):
     BUILDER_CONFIGS = [
         datasets.BuilderConfig(
-            name='sembr2023',
-            version=datasets.Version('1.0.0'),
-            description='SemBr2023 dataset'),
+            name='sembr',
+            version=datasets.Version('0.0.2'),
+            description='SemBr dataset'),
     ]
 
     def __init__(self, **kwargs):

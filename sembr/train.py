@@ -15,7 +15,7 @@ from .utils import compute_metrics
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('model', type=str)
-    parser.add_argument('-dn', '--dataset-name', type=str, default='admko/sembr2023')
+    parser.add_argument('-dn', '--dataset-name', type=str, default='admko/sembr')
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-5)
     parser.add_argument('-tb', '--train-batch-size', type=int, default=64)
     parser.add_argument('-eb', '--eval-batch-size', type=int, default=128)
@@ -87,7 +87,7 @@ def main(args):
     model.config.__dict__['max_indent'] = args.max_indent
     model.resize_token_embeddings(len(tokenizer))
     model_name = args.model.split('/')[-1]
-    run_name = f'sembr2023-{model_name}'
+    run_name = f'sembr-{model_name}'
     training_args = TrainingArguments(
         output_dir=f'checkpoints/{run_name}',
         run_name=run_name,

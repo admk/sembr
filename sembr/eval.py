@@ -24,7 +24,7 @@ def eval_model(dataset, processor, checkpoint, metric):
 
 
 def main():
-    dataset = datasets.load_from_disk('./data/sembr2023')
+    dataset = datasets.load_from_disk('./data/sembr')
     processor = SemBrProcessor()
     wer = evaluate.load('wer')
     for checkpoint in checkpoints():

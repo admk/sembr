@@ -55,7 +55,7 @@ def process_dataset(dataset, processor, tokenizer, max_indent, label2id):
 
 
 def init_dataset():
-    dataset_file = os.path.join(os.path.dirname(__file__), 'sembr2023.py')
+    dataset_file = os.path.join(os.path.dirname(__file__), 'databuilder.py')
     return datasets.load_dataset(dataset_file)
 
 def push_to_hub(dataset, hub_user, dataset_name, private):
@@ -72,7 +72,7 @@ def save_to_disk(dataset, save_dir, dataset_name):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-n', '--dataset-name', type=str, default='sembr2023')
+    parser.add_argument('-n', '--dataset-name', type=str, default='sembr')
     parser.add_argument('-s', '--save-dir', type=str, default='data')
     parser.add_argument('-u', '--hub-user', type=str, default=None)
     parser.add_argument('-p', '--private', action='store_true')
