@@ -13,19 +13,19 @@ STDERR_TTY = os.isatty(sys.stderr.fileno())
 
 def cli_parser():
     import argparse
+    from .inference import PREDICT_FUNC_MAP
     p = argparse.ArgumentParser(
         description='SemBr: Rewrap text with semantic breaks.')
     model_name = 'admko/sembr2023-bert-small'
     p.add_argument('-m', '--model-name', type=str, default=model_name)
     p.add_argument('-i', '--input-file', type=str, default=None)
     p.add_argument('-o', '--output-file', type=str, default=None)
-    p.add_argument('-w', '--words-per-line', type=int, default=10)
+    # p.add_argument('-w', '--words-per-line', type=int, default=10)
     p.add_argument('-b', '--batch-size', type=int, default=8)
     p.add_argument('-d', '--overlap-divisor', type=int, default=8)
     p.add_argument(
         '-f', '--predict-func', type=str,
-        choices=['argmax', 'breaks_first', 'logit_adjustment'],
-        default='argmax')
+        choices=PREDICT_FUNC_MAP, default='argmax')
     p.add_argument('-t', '--tokens-per-line', type=int, default=10)
     p.add_argument('-s', '--server', type=str, default='127.0.0.1')
     p.add_argument('-l', '--listen', action='store_true')
@@ -135,7 +135,8 @@ def main():
     parser = cli_parser()
     args = parser.parse_args()
     if args.listen:
-        tokenizer, model, processor = init(args.model_name)
+        tokenizer, model, processor = init(
+            args.model_name, args.bits, args.dtype)
         return start_server(args.port, tokenizer, model, processor)
     if args.input_file is not None:
         with open(args.input_file, 'r', encoding='utf-8') as f:
@@ -156,7 +157,8 @@ def main():
         result = rewrap_on_server(text, args.server, args.port, kwargs)
     else:
         from .inference import sembr
-        tokenizer, model, processor = init(args.model_name)
+        tokenizer, model, processor = init(
+            args.model_name, args.bits, args.dtype)
         result = sembr(text, tokenizer, model, processor, **kwargs)
     if args.output_file is None:
         print(result)

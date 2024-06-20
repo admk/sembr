@@ -269,18 +269,24 @@ to save best models.
 
 ## Improvements and TODOs
 
-* [ ] Support natural languages other than English.
-* [ ] Support other markup languages such as Markdown.
-* [ ] Some lines are too long without a line break.
+- [ ] Support natural languages other than English.
+- [ ] Support other markup languages such as Markdown.
+- [x] Some lines are too long without a line break.
       The inference algorithm can be improved
       to penalize long lines.
-* [ ] Performance and accuracy benchmarking,
+  - Long lines are currently penalized greedily
+    by breaking lines with token counts
+    more than `--tokens-per-line`.
+  - [ ] Support `--words-per-line`.
+  - [ ] Improve the algorithm to penalize long lines
+        with a more sophisticated method.
+- [ ] Performance and accuracy benchmarking,
       and comparisons with related works.
-* [ ] Improve inference speed.
-* [ ] Reduce memory usage.
-* [ ] Improve indent level prediction.
-* [ ] Inference queue.
-* [ ] VSCode extension.
+- [ ] Improve inference speed.
+- [ ] Reduce memory usage.
+- [ ] Improve indent level prediction.
+- [ ] Inference queue.
+- [ ] VSCode extension.
 
 
 ## Related Projects and References

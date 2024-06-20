@@ -1,5 +1,6 @@
+import functools
+
 import torch
-import numpy as np
 from tqdm import trange
 
 from transformers import DataCollatorForTokenClassification
@@ -62,15 +63,6 @@ def predict_argmax(logits, counts, tokens_per_line):
     return logits.argmax(dim=2)
 
 
-def zero_runs(a, dim):
-    # Create an array that is 1 where a is 0, and pad each end with an extra 0.
-    pad = np.zeros_like(a.take([0], dim))
-    iszero = np.concatenate([pad, (a == 0).view(np.int8), pad], dim)
-    absdiff = np.abs(np.diff(iszero))
-    # Runs start and end where absdiff is 1.
-    return np.where(absdiff == 1)[0].reshape(-1, 2)
-
-
 def predict_logit_adjustment(logits, counts, tokens_per_line):
     delta = 1.0
     logits[:, :, 0] -= delta
@@ -78,19 +70,34 @@ def predict_logit_adjustment(logits, counts, tokens_per_line):
     return logits.argmax(dim=2)
 
 
-def predict_breaks_first(logits, counts, tokens_per_line):
-    delta = 0.0
-    off_logits = logits[:, :, 0] - delta
-    break_logits = logits[:, :, 1:] + delta / logits.shape[2]
-    breaks = (break_logits > off_logits.unsqueeze(-1)).any(2)
-    break_preds = 1 + break_logits.argmax(dim=2)
-    return torch.where(breaks, break_preds, torch.zeros_like(break_preds))
+def predict_greedy_linebreaks(logits, counts, tokens_per_line):
+    has_long_lines = True
+    while has_long_lines:
+        has_long_lines = False
+        for b in range(logits.shape[0]):
+            modes, repeats = torch.unique_consecutive(
+                logits[b].argmax(dim=1), return_counts=True)
+            stops = torch.cumsum(repeats, dim=0)
+            starts = torch.cat([
+                torch.zeros(1, device=stops.device, dtype=stops.dtype),
+                stops[:-1]])
+            long_lines = (modes == 0) & (repeats > tokens_per_line)
+            if long_lines.any():
+                has_long_lines = True
+            starts, stops = starts[long_lines], stops[long_lines]
+            for s, e in zip(starts, stops):
+                # find the token with the lowest "off" logit
+                max_index = logits[b, s:e, 0].argmin(0)
+                # force linebreak by reducing "off" by -1e6
+                logits[b, s + max_index, 0] -= 1e6
+    return logits.argmax(dim=2)
+
 
 
 PREDICT_FUNC_MAP = {
     'argmax': predict_argmax,
-    'breaks_first': predict_breaks_first,
     'logit_adjustment': predict_logit_adjustment,
+    'greedy_linebreaks': predict_greedy_linebreaks,
 }
 
 
@@ -99,6 +106,8 @@ def inference(
     predict_func='argmax', tokens_per_line=10,
     batch_size=8, overlap_divisor=8,
 ):
+    if text.strip() == '':
+        return []
     collator = DataCollatorForTokenClassification(tokenizer, padding='longest')
     results = processor(text, split=isinstance(text, str))
     results = processor.tokenize_with_modes(tokenizer, results)
