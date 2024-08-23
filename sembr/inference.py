@@ -1,5 +1,3 @@
-import functools
-
 import torch
 from tqdm import trange
 
@@ -71,6 +69,8 @@ def predict_logit_adjustment(logits, counts, tokens_per_line):
 
 
 def predict_greedy_linebreaks(logits, counts, tokens_per_line):
+    if tokens_per_line is None:
+        return logits.argmax(dim=2)
     has_long_lines = True
     while has_long_lines:
         has_long_lines = False
@@ -91,7 +91,6 @@ def predict_greedy_linebreaks(logits, counts, tokens_per_line):
                 # force linebreak by reducing "off" by -1e6
                 logits[b, s + max_index, 0] -= 1e6
     return logits.argmax(dim=2)
-
 
 
 PREDICT_FUNC_MAP = {

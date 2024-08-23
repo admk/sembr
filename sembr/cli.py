@@ -26,24 +26,26 @@ def cli_parser():
     p.add_argument(
         '-f', '--predict-func', type=str,
         choices=PREDICT_FUNC_MAP, default='argmax')
-    p.add_argument('-t', '--tokens-per-line', type=int, default=10)
+    p.add_argument('-t', '--tokens-per-line', type=int, default=None)
     p.add_argument('-s', '--server', type=str, default='127.0.0.1')
     p.add_argument('-l', '--listen', action='store_true')
     p.add_argument('-p', '--port', type=int, default=8384)
     p.add_argument('--bits', type=int, choices=[4, 8], default=None)
     p.add_argument('--dtype', type=str, default=None)
+    p.add_argument('--debug', action='store_true')
     return p
 
 
 def init(model_name, bits=None, dtype=None):
     import torch
     from transformers import (
-        AutoTokenizer, AutoModelForTokenClassification, BitsAndBytesConfig)
+        AutoTokenizer, AutoModelForTokenClassification)
     from .process import SemBrProcessor
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     dtype = getattr(torch, dtype) if dtype is not None else torch.float32
     kwargs = {}
     if torch.cuda.is_available():
+        from transformers import BitsAndBytesConfig
         if bits == 4:
             kwargs['quantization_config'] = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_compute_dtype=dtype)
@@ -148,6 +150,11 @@ def rewrap_on_server(text, server, port, kwargs):
 def main():
     parser = cli_parser()
     args = parser.parse_args()
+    if args.debug:
+        import debugpy
+        debugpy.listen(5678)
+        print('Waiting for debugger to attach...')
+        debugpy.wait_for_client()
     if args.listen:
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype)
