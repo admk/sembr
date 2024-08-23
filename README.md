@@ -269,24 +269,37 @@ to save best models.
 
 ## Improvements and TODOs
 
-- [ ] Support natural languages other than English.
-- [ ] Support other markup languages such as Markdown.
-- [x] Some lines are too long without a line break.
-      The inference algorithm can be improved
-      to penalize long lines.
-  - Long lines are currently penalized greedily
-    by breaking lines with token counts
-    more than `--tokens-per-line`.
-  - [ ] Support `--words-per-line`.
-  - [ ] Improve the algorithm to penalize long lines
-        with a more sophisticated method.
-- [ ] Performance and accuracy benchmarking,
-      and comparisons with related works.
-- [ ] Improve inference speed.
-- [ ] Reduce memory usage.
-- [ ] Improve indent level prediction.
-- [ ] Inference queue.
-- [ ] VSCode extension.
+- Features:
+  - Natural language support:
+    - [ ] Support natural languages other than English.
+  - Typesetting languages support:
+    - [ ] Markdown.
+    - [ ] Typst.
+  - Usability:
+    - [ ] Inference queue.
+    - [ ] Daemon with model unloading.
+  - Editor integration:
+    - [ ] NeoVim plugin.
+    - [ ] VSCode extension.
+  - Use the [Hugging Face API][hfapi] for inference.
+    It is free to use but has a rate limit,
+    and also does not return logit values,
+    so no additional algorithms
+    can be used to improve the predictions.
+- Accuracy:
+  - Some lines are too short or too long:
+    - [x] Long lines can be penalized greedily
+          by breaking lines with token counts
+          more than `--tokens-per-line`.
+    - [ ] Support `--words-per-line`.
+    - [ ] Improve the algorithm to penalize short and long lines
+          with a more sophisticated method.
+  - [ ] Improve indent level prediction.
+  - [ ] Performance and accuracy benchmarking,
+        and comparisons with related works.
+- Performance:
+  - [ ] Improve inference speed.
+  - [ ] Reduce memory usage.
 
 
 ## Related Projects and References
@@ -300,7 +313,7 @@ Sentence splitting:
 Semantic line breaking:
 * https://github.com/sembr/specification
 * https://github.com/waldyrious/semantic-linebreaker
-* https://github.com/bobheadxi/readable ([blog post](https://bobheadxi.dev/semantic-line-breaks/))
+* https://github.com/bobheadxi/readable ([blog post][readable-blog-post])
 * https://github.com/chrisgrieser/obsidian-sembr
 * https://github.com/cllns/semantic_linefeeds
 
@@ -327,3 +340,7 @@ Semantic line breaking:
 [sembr-bert-tiny]: https://huggingface.co/admko/sembr2023-bert-tiny
 [sembr-bert-mini]: https://huggingface.co/admko/sembr2023-bert-mini
 [sembr-bert-small]: https://huggingface.co/admko/sembr2023-bert-small
+
+[hfapi]: https://huggingface.co/docs/api-inference/detailed_parameters#token-classification-task
+
+[readable-blog-post]: https://bobheadxi.dev/semantic-line-breaks
