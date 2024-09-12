@@ -281,7 +281,7 @@ to save best models.
   - Editor integration:
     - [ ] NeoVim plugin.
     - [ ] VSCode extension.
-  - Use the [Hugging Face API][hfapi] for inference.
+  - [ ] Use the [Hugging Face API][hfapi] for inference.
     It is free to use but has a rate limit,
     and also does not return logit values,
     so no additional algorithms
