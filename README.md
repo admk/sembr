@@ -17,7 +17,8 @@
 
 SemBr is a command-line tool
 powered by [Transformer][transformers1] [models][transformers2]
-that breaks lines in a text file at semantic boundaries.
+that performs [semantic linebreaks](#what-are-semantic-line-breaks)
+to breaks lines in a text file at semantic boundaries.
 
 ### Installation
 
