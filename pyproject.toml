@@ -4,12 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sembr"
-version = "0.0.2"
+dynamic = ["version"]
 authors = [
   { name="admk" },
 ]
 description = "A semantic linebreaker powered by transformers"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 requires-python = ">=3.10"
 dependencies = [
     "transformers",
@@ -21,8 +23,9 @@ dependencies = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Topic :: Utilities",
+    "Environment :: Console",
 ]
 
 [project.scripts]
@@ -35,3 +38,6 @@ Issues = "https://github.com/admk/sembr/issues"
 [tool.setuptools.packages.find]
 include = ["sembr"]
 exclude = ["data*", "tests*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "sembr.__version__"}

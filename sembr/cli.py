@@ -13,10 +13,12 @@ STDERR_TTY = os.isatty(sys.stderr.fileno())
 
 def cli_parser():
     import argparse
+    from . import __version__
     from .inference import PREDICT_FUNC_MAP
     p = argparse.ArgumentParser(
         description='SemBr: Rewrap text with semantic breaks.')
     model_name = 'admko/sembr2023-bert-small'
+    p.add_argument('-v', '--version', action='version', version=__version__)
     p.add_argument('-m', '--model-name', type=str, default=model_name)
     p.add_argument('-i', '--input-file', type=str, default=None)
     p.add_argument('-o', '--output-file', type=str, default=None)
