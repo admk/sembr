@@ -29,6 +29,16 @@ assuming that you have Python 3.10 or later installed:
 ```shell
 pip install sembr
 ```
+Alternatively,
+with [`uv`][uv]:
+```shell
+# either
+uv tool install sembr  # install
+sembr  # run
+
+# or
+uvx sembr  # install and run directly
+```
 
 ### Supported Platforms
 
@@ -323,6 +333,7 @@ Semantic line breaking:
 [transformers2]: https://lilianweng.github.io/posts/2020-04-07-the-transformer-family/
 
 [pypi]: https://pypi.org/project/sembr
+[uv]: https://github.com/astral-sh/uv
 
 [sembr]: https://sembr.org
 [semlf]: https://rhodesmill.org/brandon/2012/one-sentence-per-line
