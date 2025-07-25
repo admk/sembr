@@ -6,3 +6,5 @@ checkpoints/
 *.egg-info/
 dist/
 .DS_Store
+.tali
+CLAUDE.local.md
