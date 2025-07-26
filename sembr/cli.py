@@ -89,6 +89,8 @@ def start_server(port, tokenizer, model, processor, wrap_kwargs=None):
         text = form['text']
         kwargs = dict(wrap_kwargs or {})
         for k, v in form.items():
+            if k == 'text':
+                continue
             if k in ['batch_size', 'tokens_per_line', 'overlap_divisor']:
                 v = int(v)
             kwargs[k] = v
