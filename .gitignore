@@ -1,10 +1,11 @@
-__pycache__/
-build/
-data/
-wandb/
-checkpoints/
 *.egg-info/
-dist/
 .DS_Store
 .tali
 CLAUDE.local.md
+__pycache__/
+build/
+checkpoints/
+data/
+dist/
+uv.lock
+wandb/

@@ -22,7 +22,6 @@ def cli_parser():
     p.add_argument('-m', '--model-name', type=str, default=model_name)
     p.add_argument('-i', '--input-file', type=str, default=None)
     p.add_argument('-o', '--output-file', type=str, default=None)
-    # p.add_argument('-w', '--words-per-line', type=int, default=10)
     p.add_argument('-b', '--batch-size', type=int, default=8)
     p.add_argument('-d', '--overlap-divisor', type=int, default=8)
     p.add_argument(
@@ -35,6 +34,7 @@ def cli_parser():
     p.add_argument('--bits', type=int, choices=[4, 8], default=None)
     p.add_argument('--dtype', type=str, default=None)
     p.add_argument('--debug', action='store_true')
+    p.add_argument('--mcp', action='store_true', help='Start MCP server mode')
     return p
 
 
@@ -66,7 +66,7 @@ def init(model_name, bits=None, dtype=None):
     return tokenizer, model, processor
 
 
-def start_server(port, tokenizer, model, processor):
+def start_server(port, tokenizer, model, processor, wrap_kwargs=None):
     from flask import Flask, request
     app = Flask(__name__)
     base_rv = {
@@ -87,12 +87,11 @@ def start_server(port, tokenizer, model, processor):
         from .inference import sembr
         form = request.form
         text = form['text']
-        kwargs = {
-            'batch_size': int(form.get('batch_size', 8)),
-            'predict_func': form.get('predict_func', 'argmax'),
-            'tokens_per_line': int(form.get('tokens_per_line', 10)),
-            'overlap_divisor': int(form.get('overlap_divisor', 8)),
-        }
+        kwargs = dict(wrap_kwargs or {})
+        for k, v in form.items():
+            if k in ['batch_size', 'tokens_per_line', 'overlap_divisor']:
+                v = int(v)
+            kwargs[k] = v
         try:
             results = sembr(text, tokenizer, model, processor, **kwargs)
             return {
@@ -149,6 +148,15 @@ def rewrap_on_server(text, server, port, kwargs):
     return response['text']
 
 
+def wrap_kwargs(args):
+    return {
+        'batch_size': args.batch_size,
+        'predict_func': args.predict_func,
+        'tokens_per_line': args.tokens_per_line,
+        'overlap_divisor': args.overlap_divisor,
+    }
+
+
 def main():
     parser = cli_parser()
     args = parser.parse_args()
@@ -157,10 +165,15 @@ def main():
         debugpy.listen(5678)
         print('Waiting for debugger to attach...')
         debugpy.wait_for_client()
+    if args.mcp:
+        from .mcp import mcp
+        mcp.run()
+        return
+    kwargs = wrap_kwargs(args)
     if args.listen:
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype)
-        return start_server(args.port, tokenizer, model, processor)
+        return start_server(args.port, tokenizer, model, processor, kwargs)
     if args.input_file is not None:
         with open(args.input_file, 'r', encoding='utf-8') as f:
             text = f.read()
@@ -170,12 +183,6 @@ def main():
         parser.print_help()
         print('\nNo input file or stdin text provided.')
         return
-    kwargs = {
-        'batch_size': args.batch_size,
-        'predict_func': args.predict_func,
-        'tokens_per_line': args.tokens_per_line,
-        'overlap_divisor': args.overlap_divisor,
-    }
     if check_server(args.server, args.port):
         result = rewrap_on_server(text, args.server, args.port, kwargs)
     else:

@@ -21,6 +21,8 @@ dependencies = [
     "tqdm",
     "requests",
     "flask",
+    "mcp[cli]>=1.2.0",
+    "fastmcp>=2.10.6",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
