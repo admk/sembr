@@ -337,13 +337,10 @@ to save best models.
     - [ ] Inference queue.
     - [ ] Daemon with model unloading.
   - Editor integration:
-    - [ ] NeoVim plugin.
-    - [ ] VSCode extension.
-  - [ ] Use the [Hugging Face API][hfapi] for inference.
-    It is free to use but has a rate limit,
-    and also does not return logit values,
-    so no additional algorithms
-    can be used to improve the predictions.
+    - [x] ~~NeoVim plugin.~~
+    - [x] ~~VSCode extension.~~
+    - [x] MCP server.
+  - [x] ~~Use the [Hugging Face API][hfapi] for inference.~~
 - Accuracy:
   - Some lines are too short or too long:
     - [x] Long lines can be penalized greedily
@@ -356,8 +353,8 @@ to save best models.
   - [ ] Performance and accuracy benchmarking,
         and comparisons with related works.
 - Performance:
-  - [ ] Improve inference speed.
-  - [ ] Reduce memory usage.
+  - [x] Improve inference speed.
+  - [x] Reduce memory usage.
 
 
 ## Related Projects and References
