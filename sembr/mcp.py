@@ -60,22 +60,5 @@ def wrap_text(
         structured_content={"success": True, "output": wrapped_text})
 
 
-@mcp.tool(
-    description="Apply semantic line breaks to file",
-    tags=["sembr", "semantic linebreak", "format", "file"],
-)
-def process_file(
-    file_path: Annotated[str, Field(description="File path to process")],
-) -> ToolResult:
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            text = f.read()
-    except Exception as e:
-        return ToolResult(
-            content=[TextContent(type="text", text=f"Error reading file: {file_path}")],
-            structured_content={"success": False, "error": str(e)})
-    return wrap_text(text)
-
-
 if __name__ == "__main__":
     mcp.run()

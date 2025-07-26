@@ -157,7 +157,7 @@ def wrap_kwargs(args):
     }
 
 
-def main():
+def main() -> int:
     parser = cli_parser()
     args = parser.parse_args()
     if args.debug:
@@ -167,13 +167,21 @@ def main():
         debugpy.wait_for_client()
     if args.mcp:
         from .mcp import mcp
+        unsupported = ['input_file', 'output_file', 'listen']
+        for arg_name in unsupported:
+            if getattr(args, arg_name) in [None, False]:
+                continue
+            message = f'--{arg_name} is not supported in MCP mode.'
+            print(message, file=sys.stderr)
+            return 1
         mcp.run()
-        return
+        return 0
     kwargs = wrap_kwargs(args)
     if args.listen:
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype)
-        return start_server(args.port, tokenizer, model, processor, kwargs)
+        start_server(args.port, tokenizer, model, processor, kwargs)
+        return 0
     if args.input_file is not None:
         with open(args.input_file, 'r', encoding='utf-8') as f:
             text = f.read()
@@ -181,8 +189,8 @@ def main():
         text = sys.stdin.read()
     else:
         parser.print_help()
-        print('\nNo input file or stdin text provided.')
-        return
+        print('\nNo input file or stdin text provided.', file=sys.stderr)
+        return 1
     if check_server(args.server, args.port):
         result = rewrap_on_server(text, args.server, args.port, kwargs)
     else:
@@ -192,10 +200,11 @@ def main():
         result = sembr(text, tokenizer, model, processor, **kwargs)
     if args.output_file is None:
         print(result)
-        return
+        return 0
     with open(args.output_file, 'w', encoding='utf-8') as f:
         f.write(result)
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    sys.exit(main())

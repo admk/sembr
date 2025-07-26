@@ -50,6 +50,8 @@ to accelerate inference.
 
 ### Usage
 
+#### Command Line Interface
+
 To use SemBr,
 run the following command in your terminal:
 ```shell
@@ -84,7 +86,7 @@ Additionally,
 you can specify the following options
 to customize the behavior of SemBr:
 
-* `-m <model_name>`:
+* `-m <model_name>`, `--model-name <model_name>`:
   The name of the Hugging Face model to use.
   - The default is
     [`admko/sembr2023-bert-small`][sembr-bert-small].
@@ -93,7 +95,7 @@ to customize the behavior of SemBr:
     and then specify the path to the model directory,
     or prepend `TRANSFORMERS_OFFLINE=1` to the command
     to use the cached model.
-* `-l`:
+* `-l`, `--listen`:
   Serves the SemBr API on a local server.
   - Each instance of `sembr` run
     will detect if the API is accessible,
@@ -101,13 +103,58 @@ to customize the behavior of SemBr:
   - This option is useful
     to avoid the time taken to initialize the model
     by keeping it in memory in a separate process.
-* `-p <port>`:
+* `-p <port>`, `--port <port>`:
   The port to serve the SemBr API on.
   - The default is `8384`.
-* `-s <ip>`:
+* `-s <ip>`, `--server <ip>`:
   The IP address to serve the SemBr API on.
   - The default is `127.0.0.1`.
+* `-b <int>`, `--batch_size <int>`:
+  The number of lines to process in a batch.
+  Default is `8`.
+* `-d <int>`, `--overlap-divisor <int>`:
+  The overlap divisor for tiled inference.
+  Default is `8`.
+* `-f <func>`, `--predict-func <func>`:
+  The prediction function to use.
+  Options are `argmax`, `logit_adjustment`, `greedy_line_breaks`.
+  Default is `argmax`.
+* `-t <int>`, `--tokens-per-line <int>`:
+  Maximum tokens per line for greedy line breaking.
+  This is only effective
+  when using the `greedy_line_breaks` prediction function.
+* `--bits <4|8>`:
+  Quantization bits for model weights (4 or 8).
+  Requires CUDA. Not supported on MPS.
+* `--dtype <dtype>`:
+  Data type for model weights (e.g. `float16`, `bfloat16`).
+  Default is `float32`.
+* `--mcp`:
+  Start MCP server mode instead of processing text.
 
+
+#### MCP Server
+
+Alternatively,
+you can run `sembr` as an [MCP server][mcp].
+Simply add the following configuration
+to your MCP server configuration:
+```json
+"mcpServers": {
+  "sembr": {
+    "type": "stdio",
+    "command": "uvx",
+    "args": [
+      "sembr",
+      "--mcp"
+    ],
+  }
+}
+```
+
+The server also supports the formatting options described above.
+It will expose a `wrap_text` tool
+for the MCP client to use.
 
 ## What are Semantic Line Breaks?
 
@@ -334,6 +381,7 @@ Semantic line breaking:
 
 [pypi]: https://pypi.org/project/sembr
 [uv]: https://github.com/astral-sh/uv
+[mcp]: https://modelcontextprotocol.io/overview
 
 [sembr]: https://sembr.org
 [semlf]: https://rhodesmill.org/brandon/2012/one-sentence-per-line
