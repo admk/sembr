@@ -143,6 +143,20 @@ class SemBrProcessor(object):
             'base_indent': base_indent,
         }
 
+    def parse_text(self, text, split=True):
+        text = text.replace('\t', ' ' * self.spaces)
+        if split:
+            text = re.split(r'\n(?:\s*\n)+', text)
+        elif isinstance(text, str):
+            raise ValueError(
+                'Text must be a list of strings if split=True.')
+        paras = []
+        for p in text:
+            if not p.strip():
+                continue
+            paras.append(self._process_paragraph(p))
+        return paras
+
     def _tokenize_with_modes(
         self, tokenizer, text, line_modes, line_mode_offsets, line_indents
     ):
@@ -200,19 +214,6 @@ class SemBrProcessor(object):
                     f'Lengths do not match. Found: {len_dict}.')
             new_results.append(tokenized)
         return new_results
-
-    def __call__(self, text, split=True):
-        if split:
-            text = re.split(r'\n(?:\s*\n)+', text)
-        elif isinstance(text, str):
-            raise ValueError(
-                'Text must be a list of strings if split=True.')
-        paras = []
-        for p in text:
-            if not p.strip():
-                continue
-            paras.append(self._process_paragraph(p))
-        return paras
 
     def _replace_newlines(self, words, modes, indents):
         new_words, new_modes, new_indents = [], [], []
@@ -288,11 +289,10 @@ class SemBrProcessor(object):
 
 
 if __name__ == '__main__':
-    # test = open('./data/test/mair.tex', 'r').read()
-    test = open('./data/example.tex', 'r').read()
+    test = open('./data/raw/example.tex', 'r').read()
     processor = SemBrProcessor()
     tokenizer = AutoTokenizer.from_pretrained('distilbert-base-uncased')
-    results = processor(test)
+    results = processor.parse_text(test)
     results = processor.tokenize_with_modes(tokenizer, results)
     print('--- Processed ---')
     print(processor.generate(results))

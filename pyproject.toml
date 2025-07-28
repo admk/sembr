@@ -15,14 +15,15 @@ license-files = ["LICEN[CS]E*"]
 requires-python = ">=3.10"
 dependencies = [
     "accelerate",
-    "transformers",
-    "torch",
-    "numpy",
-    "tqdm",
-    "requests",
+    "fastmcp",
     "flask",
-    "mcp[cli]>=1.2.0",
-    "fastmcp>=2.10.6",
+    "mcp[cli]",
+    "numpy",
+    "pydantic",
+    "requests",
+    "torch",
+    "tqdm",
+    "transformers",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

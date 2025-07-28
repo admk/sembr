@@ -108,7 +108,7 @@ def inference(
     if text.strip() == '':
         return []
     collator = DataCollatorForTokenClassification(tokenizer, padding='longest')
-    results = processor(text, split=isinstance(text, str))
+    results = processor.parse_text(text, split=isinstance(text, str))
     results = processor.tokenize_with_modes(tokenizer, results)
     logits, counts = _tiled_inference(
         model, collator, results, batch_size, overlap_divisor)
