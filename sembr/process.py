@@ -279,7 +279,7 @@ class SemBrProcessor(object):
         text = '\n'.join(lines)
         for k, v in self.reverse_replace_tokens.items():
             text = text.replace(k, v)
-        return text
+        return text.rstrip()
 
     def generate(self, paragraphs, join=True):
         paragraphs = [self._generate_paragraph(p) for p in paragraphs]
