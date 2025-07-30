@@ -24,6 +24,8 @@ dependencies = [
     "torch",
     "tqdm",
     "transformers",
+    "tree-sitter>=0.25.0",
+    "tree-sitter-markdown>=0.3.2",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

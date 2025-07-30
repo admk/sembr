@@ -35,14 +35,17 @@ def cli_parser():
     p.add_argument('--dtype', type=str, default=None)
     p.add_argument('--debug', action='store_true')
     p.add_argument('--mcp', action='store_true', help='Start MCP server mode')
+    p.add_argument(
+        '--file-type', type=str, default=None,
+        help='File type (latex, markdown, etc.). Auto-detected if not specified.')
     return p
 
 
-def init(model_name, bits=None, dtype=None):
+def init(model_name, bits=None, dtype=None, file_type=None, file_path=None):
     import torch
     from transformers import (
         AutoTokenizer, AutoModelForTokenClassification)
-    from .process import SemBrProcessor
+    from .processors import get_processor
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     dtype = getattr(torch, dtype) if dtype is not None else torch.float32
     kwargs = {}
@@ -62,7 +65,7 @@ def init(model_name, bits=None, dtype=None):
     model = AutoModelForTokenClassification.from_pretrained(
         model_name, torch_dtype=dtype, **kwargs)
     model.eval()
-    processor = SemBrProcessor()
+    processor = get_processor(file_type=file_type, file_path=file_path)
     return tokenizer, model, processor
 
 
@@ -181,7 +184,7 @@ def main() -> int:
     kwargs = wrap_kwargs(args)
     if args.listen:
         tokenizer, model, processor = init(
-            args.model_name, args.bits, args.dtype)
+            args.model_name, args.bits, args.dtype, args.file_type)
         start_server(args.port, tokenizer, model, processor, kwargs)
         return 0
     if args.input_file is not None:
@@ -198,7 +201,7 @@ def main() -> int:
     else:
         from .inference import sembr
         tokenizer, model, processor = init(
-            args.model_name, args.bits, args.dtype)
+            args.model_name, args.bits, args.dtype, args.file_type, args.input_file)
         result = sembr(text, tokenizer, model, processor, **kwargs)
     if args.output_file is None:
         print(result)
