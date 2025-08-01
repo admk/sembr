@@ -110,12 +110,13 @@ class MarkdownProcessor(BaseProcessor):
                     total_indent += base_indent + marker_indent
 
             elif context['type'] == 'block_quote':
-                # Block quote needs > prefix (only for the innermost block quote)
-                if not prefix:  # Only set prefix for the innermost block quote
-                    match = re.match(r'^(\s*)', first_line)
-                    base_indent = match.group(1) if match else ''
+                # Extract the actual quote prefix from the source text to preserve spacing
+                match = re.match(r'^(\s*)(>+\s*)', first_line)
+                if match:
+                    base_indent = match.group(1)
+                    quote_prefix = match.group(2)  # The actual > characters with their spacing
                     total_indent += base_indent
-                    prefix = '> '
+                    prefix += quote_prefix
 
         return {'prefix': prefix, 'indent': total_indent}
 
