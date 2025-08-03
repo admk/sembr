@@ -19,6 +19,9 @@ SemBr is a command-line tool
 powered by [Transformer][transformers1] [models][transformers2]
 that performs [semantic linebreaks](#what-are-semantic-line-breaks)
 to breaks lines in a text file at semantic boundaries.
+It supports multiple file types
+including LaTeX, Markdown, and plain text,
+with automatic file type detection.
 
 ### Installation
 
@@ -39,6 +42,34 @@ sembr  # run
 # or
 uvx sembr  # install and run directly
 ```
+
+#### From GitHub (Latest Development Version)
+
+To install the latest development version directly from GitHub:
+
+```shell
+# Install from GitHub main branch
+uv tool install git+https://github.com/admk/sembr.git
+
+# Run directly without installing
+uvx --from git+https://github.com/admk/sembr.git sembr
+```
+
+Alternatively, clone and install in development mode:
+
+```shell
+# Clone the repository
+git clone https://github.com/admk/sembr.git
+cd sembr
+
+# Install in development mode
+pip install -e .
+
+# Or with uv
+uv pip install -e .
+```
+
+Note that the development version may include experimental features and could be less stable than the PyPI release.
 
 ### Supported Platforms
 
@@ -129,6 +160,9 @@ to customize the behavior of SemBr:
 * `--dtype <dtype>`:
   Data type for model weights (e.g. `float16`, `bfloat16`).
   Default is `float32`.
+* `--file-type <type>`:
+  File type (`plaintext`, `latex`, `markdown`, etc.).
+  Auto-detected using [Magika][magika] if not provided.
 * `--mcp`:
   Start MCP server mode instead of processing text.
 
@@ -331,7 +365,7 @@ to save best models.
   - Natural language support:
     - [ ] Support natural languages other than English.
   - Typesetting languages support:
-    - [ ] Markdown.
+    - [x] ~~Markdown.~~
     - [ ] Typst.
   - Usability:
     - [ ] Inference queue.
@@ -379,6 +413,7 @@ Semantic line breaking:
 [pypi]: https://pypi.org/project/sembr
 [uv]: https://github.com/astral-sh/uv
 [mcp]: https://modelcontextprotocol.io/overview
+[magika]: https://github.com/google/magika
 
 [sembr]: https://sembr.org
 [semlf]: https://rhodesmill.org/brandon/2012/one-sentence-per-line
