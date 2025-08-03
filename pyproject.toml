@@ -17,6 +17,7 @@ dependencies = [
     "accelerate",
     "fastmcp",
     "flask",
+    "magika",
     "mcp[cli]",
     "numpy",
     "pydantic",
