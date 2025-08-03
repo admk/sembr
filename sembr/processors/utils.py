@@ -2,6 +2,7 @@ from magika import Magika
 
 from .latex import LaTeXProcessor
 from .markdown import MarkdownProcessor
+from .plaintext import PlaintextProcessor
 
 
 PROCESSORS = {
@@ -9,6 +10,7 @@ PROCESSORS = {
     'tex': LaTeXProcessor,
     'markdown': MarkdownProcessor,
     'md': MarkdownProcessor,
+    'plaintext': PlaintextProcessor,
 }
 
 
