@@ -50,7 +50,12 @@ def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text
     import torch
     from transformers import AutoTokenizer, AutoModelForTokenClassification
     from .processors import get_processor
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+    except Exception:
+        tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
+
     dtype = getattr(torch, dtype) if dtype is not None else torch.float32
     kwargs = {}
     if torch.cuda.is_available():
@@ -66,10 +71,17 @@ def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text
         if bits in [4, 8]:
             raise RuntimeError('MPS does not support quantization.')
         kwargs['device_map'] = 'mps'
-    model = AutoModelForTokenClassification.from_pretrained(
-        model_name, torch_dtype=dtype, **kwargs)
+
+    try:
+        model = AutoModelForTokenClassification.from_pretrained(
+            model_name, torch_dtype=dtype, **kwargs)
+    except Exception:
+        model = AutoModelForTokenClassification.from_pretrained(
+            model_name, torch_dtype=dtype, local_files_only=True, **kwargs)
+
     model.eval()
-    processor = get_processor(file_type=file_type, file_path=file_path, text=text, verbose=verbose)
+    processor = get_processor(
+        file_type=file_type, file_path=file_path, text=text, verbose=verbose)
     return tokenizer, model, processor
 
 
