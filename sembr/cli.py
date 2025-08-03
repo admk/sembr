@@ -18,7 +18,9 @@ def cli_parser():
     p = argparse.ArgumentParser(
         description='SemBr: Rewrap text with semantic breaks.')
     model_name = 'admko/sembr2023-bert-small'
-    p.add_argument('-v', '--version', action='version', version=__version__)
+    p.add_argument('-V', '--version', action='version', version=__version__)
+    p.add_argument(
+        '-v', '--verbose', action='store_true', help='Enable verbose output')
     p.add_argument('-m', '--model-name', type=str, default=model_name)
     p.add_argument('-i', '--input-file', type=str, default=None)
     p.add_argument('-o', '--output-file', type=str, default=None)
@@ -44,7 +46,7 @@ def cli_parser():
     return p
 
 
-def init(model_name, bits=None, dtype=None, file_type=None, file_path=None):
+def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text=None, verbose=False):
     import torch
     from transformers import AutoTokenizer, AutoModelForTokenClassification
     from .processors import get_processor
@@ -67,7 +69,7 @@ def init(model_name, bits=None, dtype=None, file_type=None, file_path=None):
     model = AutoModelForTokenClassification.from_pretrained(
         model_name, torch_dtype=dtype, **kwargs)
     model.eval()
-    processor = get_processor(file_type=file_type, file_path=file_path)
+    processor = get_processor(file_type=file_type, file_path=file_path, text=text, verbose=verbose)
     return tokenizer, model, processor
 
 
@@ -201,7 +203,7 @@ def main() -> int:
     kwargs = wrap_kwargs(args)
     if args.listen:
         tokenizer, model, _ = init(
-            args.model_name, args.bits, args.dtype, args.file_type)
+            args.model_name, args.bits, args.dtype, args.file_type, None, None, args.verbose)
         start_server(args.port, tokenizer, model, args.file_type, kwargs)
         return 0
     if args.input_file is not None:
@@ -219,7 +221,7 @@ def main() -> int:
         from .inference import sembr
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype,
-            args.file_type, args.input_file)
+            args.file_type, args.input_file, text, args.verbose)
         result = sembr(text, tokenizer, model, processor, **kwargs)
     if args.output_file is None:
         print(result)

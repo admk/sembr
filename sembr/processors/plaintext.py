@@ -8,7 +8,7 @@ from typing import List, Dict, Any
 from .base import BaseProcessor
 
 
-class PlaintextProcessor(BaseProcessor):
+class PlainTextProcessor(BaseProcessor):
     """
     Processor for plain text without markup-specific syntax.
     Uses the base implementation methods for simple, generic text processing.
