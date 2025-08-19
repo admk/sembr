@@ -1,28 +1,27 @@
 """
-Markdown processor that uses tree-sitter to identify and wrap only inline text content.
-This approach preserves all markdown structure while applying semantic line breaks.
+Markdown processor that uses tree-sitter
+to identify and wrap only inline text content.
+This approach preserves all markdown structure
+while applying semantic line breaks.
 """
 
 import re
-from typing import List, Dict, Any
+from typing import List, Dict, Any, is_typeddict
 
-try:
-    import tree_sitter_markdown as tsmarkdown
-    from tree_sitter import Language, Parser
-except ImportError as e:
-    raise ImportError(
-        "tree-sitter and tree-sitter-markdown are required. "
-        "Install with: pip install tree-sitter tree-sitter-markdown"
-    ) from e
+import tree_sitter_markdown as tsmarkdown
+from tree_sitter import Language, Parser
 
 from .base import BaseProcessor
 
 
 class MarkdownProcessor(BaseProcessor):
     """
-    Markdown processor that only wraps inline text content,
-    leaving all markdown structure intact. Uses tree-sitter to identify
-    paragraph content and applies semantic line breaks only to the text.
+    Markdown processor
+    that only wraps inline text content,
+    leaving all markdown structure intact.
+    Uses tree-sitter to identify
+    paragraph content and applies semantic line breaks
+    only to the text.
     """
 
     def __init__(self, spaces: int = 4):
@@ -105,24 +104,25 @@ class MarkdownProcessor(BaseProcessor):
             if context["type"] == "list_item":
                 # Extract list marker and calculate continuation indent
                 match = re.match(r"^(\s*)([-*+]|\d+\.)\s*", first_line)
-                if match:
-                    base_indent = match.group(1)
-                    marker_part = match.group(2)  # Just the marker (-, *, +, or 1.)
-                    # Calculate continuation indent: base + marker + space
-                    marker_indent = " " * (
-                        len(marker_part) + 1
-                    )  # +1 for space after marker
-                    total_indent += base_indent + marker_indent
+                if not match:
+                    continue
+                base_indent = match.group(1)
+                # Just the marker (-, *, +, or 1.)
+                marker_part = match.group(2)
+                # Calculate continuation indent: base + marker + space
+                # +1 for space after marker
+                marker_indent = " " * (len(marker_part) + 1)
+                total_indent += base_indent + marker_indent
             elif context["type"] == "block_quote":
                 # Extract the actual quote prefix
                 match = re.match(r"^(\s*)(>+\s*)", first_line)
-                if match:
-                    base_indent = match.group(1)
-                    quote_prefix = match.group(
-                        2
-                    )  # The actual > characters with their spacing
-                    total_indent += base_indent
-                    prefix += quote_prefix
+                if not match:
+                    continue
+                base_indent = match.group(1)
+                # The actual > characters with their spacing
+                quote_prefix = match.group(2)
+                total_indent += base_indent
+                prefix += quote_prefix
         return {"prefix": prefix, "indent": total_indent}
 
     def parse_text(self, text: str, split: bool = True) -> List[Dict[str, Any]]:
@@ -152,9 +152,13 @@ class MarkdownProcessor(BaseProcessor):
         return processed_regions
 
     def _process_text_simple(self, text: str) -> Dict[str, Any]:
-        """Process text using proper SemBr logic."""
+        """Process text region."""
         # Split into lines and process
         lines = text.split("\n") if "\n" in text else [text]
+        # TODO: treat inline hyperlinks as specials
+        # and replace them with special identifiers,
+        # replace them back after wrapping
+        # to avoid breaking within links
         lines = self._process_specials(lines)
         lines, indents = self._process_indents(lines)
         base_indent = min(indents) if indents else 0
@@ -193,7 +197,7 @@ class MarkdownProcessor(BaseProcessor):
     def tokenize_with_modes(
         self, tokenizer, results: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        """Tokenize text regions using proper SemBr tokenization."""
+        """Tokenize text regions to get modes and indents."""
         self.prepare_tokenizer(tokenizer)
         new_results = []
         for r in results:
@@ -233,7 +237,7 @@ class MarkdownProcessor(BaseProcessor):
         """Proper tokenization with spacing preservation."""
         enc = tokenizer(text, return_offsets_mapping=True)
         words, modes, indents = [], [], []
-        pos = mode_idx = 0
+        pos = 0
         # Fill gaps in offset mapping
         offset_mapping = []
         for start, end in enc.offset_mapping:
@@ -253,28 +257,29 @@ class MarkdownProcessor(BaseProcessor):
         return input_ids, words, modes, indents
 
     def _generate_wrapped_text(self, region: Dict[str, Any]) -> str:
-        """Generate wrapped text using proper SemBr generation with continuation formatting."""
+        """Generate wrapped text with continuation formatting. """
         words = region["words"]
         modes = region["modes"]
         indents = region["indents"]
         base_indent = region["base_indent"]
-        continuation_prefix = region["continuation_prefix"]
-        continuation_indent = region["continuation_indent"]
+        cont_prefix = region["continuation_prefix"]
+        cont_indent = region["continuation_indent"]
         # Use proper SemBr generation pipeline
         words, modes, indents = self._replace_newlines(words, modes, indents)
         lines, indents = self._generate_lines(words, modes, indents)
         lines = self._indent_lines(lines, indents, base_indent)
         # Apply continuation formatting to wrapped lines
-        if len(lines) > 1 and (continuation_prefix or continuation_indent):
-            formatted_lines = [lines[0]]  # First line stays as-is
-            for line in lines[1:]:
-                if line.strip():  # Only format non-empty lines
-                    formatted_line = continuation_indent + continuation_prefix
-                    formatted_line += line.lstrip()
-                    formatted_lines.append(formatted_line)
-                else:
-                    formatted_lines.append(line)  # Keep empty lines as-is
-            lines = formatted_lines
+        if len(lines) > 1 and (cont_prefix or cont_indent):
+            # formatted_lines = [lines[0]]  # First line stays as-is
+            # for line in lines[1:]:
+            #     if line.strip():  # Only format non-empty lines
+            #         formatted_lines.append(
+            #             cont_indent + cont_prefix + line.lstrip())
+            #     else:
+            #         formatted_lines.append(line)  # Keep empty lines as-is
+            lines = [lines[0]] + [
+                cont_indent + cont_prefix + line.lstrip()
+                for line in lines[1:]]
         text = "\n".join(lines)
         # Apply reverse token replacements
         for k, v in self.reverse_replace_tokens.items():
