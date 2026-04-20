@@ -24,7 +24,7 @@ class BaseProcessor(ABC):
         self.spaces = spaces
         self.replace_tokens = self._get_replace_tokens()
         self.reverse_replace_tokens = {
-            v: k for k, v in self.replace_tokens.items() if k != "\t"
+            v: k for k, v in self.replace_tokens.items()
         }
 
     @abstractmethod

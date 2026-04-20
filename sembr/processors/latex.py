@@ -22,7 +22,6 @@ class LaTeXProcessor(BaseProcessor):
             Dictionary mapping original tokens to replacement tokens
         """
         return {
-            "\t": " " * self.spaces,
             "\\%": "[percent]",
             "\n": "[newline]",
         }
