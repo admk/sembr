@@ -23,6 +23,12 @@ It supports multiple file types
 including LaTeX, Markdown, and plain text,
 with automatic file type detection.
 
+For coding agents,
+as an alternative,
+I also use [SemBr.Skill](https://github.com/admk/sembr.skill/)
+to perform semantic linebreaks
+and check consistency before and after edits.
+
 ### Installation
 
 SemBr is available as a [Python package on PyPI][pypi].
