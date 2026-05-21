@@ -22,7 +22,6 @@ class PlainTextProcessor(BaseProcessor):
             Dictionary mapping original tokens to replacement tokens
         """
         return {
-            '\t': ' ' * self.spaces,
             '\n': '[newline]',
         }
 

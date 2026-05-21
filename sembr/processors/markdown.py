@@ -34,7 +34,6 @@ class MarkdownProcessor(BaseProcessor):
 
     def _get_replace_tokens(self) -> Dict[str, str]:
         return {
-            "\t": " " * self.spaces,
             "\n": "[newline]",
         }
 
@@ -128,6 +127,7 @@ class MarkdownProcessor(BaseProcessor):
 
     def parse_text(self, text: str, split: bool = True) -> List[Dict[str, Any]]:
         """Parse text to find inline content regions."""
+        text = text.replace("\t", " " * self.spaces)
         self._original_text = text
         text_regions = self._identify_content_regions(text)
         # Process each text region
