@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from sembr.inference import (
     _line_length_loss,
     predict_balanced_linebreaks,
+    predict_greedy_linebreaks,
 )
 
 
@@ -19,20 +20,40 @@ def test_balanced_linebreaks_uses_best_break_label():
     logits[0, 4, 2] = 4.0
     counts = torch.ones((1, 8), dtype=torch.long)
 
-    preds = predict_balanced_linebreaks(logits, counts, '4')
+    preds = predict_balanced_linebreaks(
+        logits, counts, max_tokens_per_line=4)
 
     assert preds.tolist() == [[0, 0, 0, 0, 2, 0, 0, 0]]
 
 
-def test_balanced_linebreaks_accepts_line_length_range():
+def test_balanced_linebreaks_accepts_line_length_bounds():
     logits = torch.zeros((1, 9, 2))
     logits[:, :, 0] = 1.0
     logits[:, :, 1] = -1.0
     counts = torch.ones((1, 9), dtype=torch.long)
 
-    preds = predict_balanced_linebreaks(logits, counts, '4:5@1.0')
+    preds = predict_balanced_linebreaks(
+        logits,
+        counts,
+        min_tokens_per_line=4,
+        max_tokens_per_line=5,
+        length_loss_weight=1.0,
+    )
 
     assert preds.tolist() == [[0, 0, 0, 0, 1, 0, 0, 0, 0]]
+
+
+def test_greedy_linebreaks_uses_max_tokens_per_line():
+    logits = torch.zeros((1, 4, 2))
+    logits[:, :, 0] = 1.0
+    counts = torch.ones((1, 4), dtype=torch.long)
+
+    uncapped = predict_greedy_linebreaks(logits.clone(), counts)
+    capped = predict_greedy_linebreaks(
+        logits.clone(), counts, max_tokens_per_line=3)
+
+    assert uncapped.tolist() == [[0, 0, 0, 0]]
+    assert capped.sum().item() == 1
 
 
 def _predict_balanced_linebreaks_brute(logits, counts, tokens_per_line):
@@ -76,7 +97,13 @@ def test_balanced_linebreaks_matches_brute_force_small_cases():
     logits = torch.randn((4, 12, 4), generator=generator)
     counts = torch.ones((4, 12), dtype=torch.long)
 
-    preds = predict_balanced_linebreaks(logits, counts, (3, 5, 0.05))
+    preds = predict_balanced_linebreaks(
+        logits,
+        counts,
+        min_tokens_per_line=3,
+        max_tokens_per_line=5,
+        length_loss_weight=0.05,
+    )
     expected = _predict_balanced_linebreaks_brute(logits, counts, (3, 5, 0.05))
 
     assert preds.tolist() == expected.tolist()
@@ -89,8 +116,20 @@ def test_balanced_linebreaks_length_weight_can_be_tuned():
     logits[0, 3, 1] = 5.0
     counts = torch.ones((1, 12), dtype=torch.long)
 
-    soft_preds = predict_balanced_linebreaks(logits, counts, '5:6@0.05')
-    hard_preds = predict_balanced_linebreaks(logits, counts, '5:6@1.0')
+    soft_preds = predict_balanced_linebreaks(
+        logits,
+        counts,
+        min_tokens_per_line=5,
+        max_tokens_per_line=6,
+        length_loss_weight=0.05,
+    )
+    hard_preds = predict_balanced_linebreaks(
+        logits,
+        counts,
+        min_tokens_per_line=5,
+        max_tokens_per_line=6,
+        length_loss_weight=1.0,
+    )
 
     assert soft_preds[0, 3].item() == 1
     assert hard_preds[0, 3].item() == 0

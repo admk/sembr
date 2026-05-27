@@ -73,7 +73,9 @@ pip install -e .
 uv run sembr --help
 ```
 
-Note that the development version may include experimental features and could be less stable than the PyPI release.
+Note that the development version
+may include experimental features
+and could be less stable than the PyPI release.
 
 ### Supported Platforms
 
@@ -138,7 +140,12 @@ You can override config values for a single run
 with `-c` or `--config`:
 
 ```shell
-sembr -c model.name=/path/to/model -c optimize.algorithm=balanced_linebreaks -c optimize.tokens_per_line=8:12@0.05
+sembr \
+  -c model.name=/path/to/model \
+  -c optimize.algorithm=balanced_linebreaks \
+  -c optimize.min_tokens_per_line=8 \
+  -c optimize.max_tokens_per_line=12 \
+  -c optimize.length_loss_weight=0.05
 ```
 
 The supported config keys are:
@@ -162,15 +169,14 @@ The supported config keys are:
   Options are `argmax`, `logit_adjustment`, `greedy_linebreaks`,
   and `balanced_linebreaks`.
   Default is `argmax`.
-* `optimize.tokens_per_line`:
-  Target tokens per line.
-  Use an integer such as `10`
-  or a range string such as `"8:12"`.
-  Add `@weight` to tune the length penalty,
-  such as `"8:12@0.05"`.
-  This is only effective
-  when using the `greedy_linebreaks`
-  or `balanced_linebreaks` prediction function.
+* `optimize.min_tokens_per_line`:
+  Lower target bound for `balanced_linebreaks`.
+* `optimize.max_tokens_per_line`:
+  Token cap used by `greedy_linebreaks`
+  and upper target bound for `balanced_linebreaks`.
+* `optimize.length_loss_weight`:
+  Penalty weight for balanced line lengths outside the target bounds.
+  The default is `0.05`.
 * `server.ip`:
   The IP address of the SemBr API server.
   The default is `127.0.0.1`.
@@ -407,7 +413,7 @@ to save best models.
   - Some lines are too short or too long:
     - [x] Long lines can be penalized greedily
           by breaking lines with token counts
-          more than `optimize.tokens_per_line`.
+          more than `optimize.max_tokens_per_line`.
     - [ ] Support `--words-per-line`.
     - [ ] Improve the algorithm to penalize short and long lines
           with a more sophisticated method.

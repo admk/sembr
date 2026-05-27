@@ -1,4 +1,5 @@
-# Default SemBr configuration; copy to $XDG_CONFIG_HOME/sembr/config.toml and edit as needed.
+# Default SemBr configuration;
+# copy to $XDG_CONFIG_HOME/sembr/config.toml and edit as needed.
 [model]
 # Hugging Face model name or local model path.
 name = "admko/sembr2023-bert-small"
@@ -14,11 +15,13 @@ batch_size = 8
 overlap_divisor = 8
 
 [optimize]
-# Prediction algorithm: argmax, logit_adjustment, greedy_linebreaks, or balanced_linebreaks.
+# Prediction algorithm, supports:
+#   argmax, logit_adjustment, greedy_linebreaks, or balanced_linebreaks.
 algorithm = "argmax"
-# Token cap or range used by greedy_linebreaks and balanced_linebreaks.
-# For balanced_linebreaks, ranges can include a penalty weight, e.g. "8:12@0.05".
-# tokens_per_line = 10
+# min_tokens_per_line = 8  # Lower bound
+# max_tokens_per_line = 12  # Upper bound
+# Penalty weight for balanced_linebreaks line lengths outside the target bounds.
+length_loss_weight = 0.05
 
 [server]
 # API server IP address checked by clients.

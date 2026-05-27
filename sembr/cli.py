@@ -26,7 +26,9 @@ CONFIG_KEY_MAP = {
     'inference.batch_size': 'batch_size',
     'inference.overlap_divisor': 'overlap_divisor',
     'optimize.algorithm': 'predict_func',
-    'optimize.tokens_per_line': 'tokens_per_line',
+    'optimize.min_tokens_per_line': 'min_tokens_per_line',
+    'optimize.max_tokens_per_line': 'max_tokens_per_line',
+    'optimize.length_loss_weight': 'length_loss_weight',
     'server.ip': 'server',
     'server.port': 'port',
 }
@@ -36,14 +38,21 @@ CONFIG_TYPES = {
     'batch_size': int,
     'overlap_divisor': int,
     'predict_func': str,
-    'tokens_per_line': int,
+    'min_tokens_per_line': int,
+    'max_tokens_per_line': int,
+    'length_loss_weight': float,
     'server': str,
     'port': int,
     'bits': int,
     'dtype': str,
 }
 
-CONFIG_NULLABLE = {'tokens_per_line', 'bits', 'dtype'}
+CONFIG_NULLABLE = {
+    'min_tokens_per_line',
+    'max_tokens_per_line',
+    'bits',
+    'dtype',
+}
 PREDICT_FUNCS = (
     'argmax',
     'logit_adjustment',
@@ -131,10 +140,8 @@ def _parse_config_value(key, value):
         if attr in CONFIG_NULLABLE:
             return None
         raise ValueError(f'Config key {key!r} cannot be null.')
-    if attr == 'tokens_per_line':
-        return _parse_tokens_per_line_config_value(key, value)
     expected_type = CONFIG_TYPES[attr]
-    if expected_type is int and isinstance(value, bool):
+    if expected_type in [int, float] and isinstance(value, bool):
         raise ValueError(
             f'Config key {key!r} must be {expected_type.__name__}.')
     if isinstance(value, str) and expected_type is not str:
@@ -145,6 +152,8 @@ def _parse_config_value(key, value):
         except ValueError:
             raise ValueError(
                 f'Config key {key!r} must be {expected_type.__name__}.')
+    if expected_type is float and isinstance(value, int):
+        value = float(value)
     if not isinstance(value, expected_type):
         raise ValueError(
             f'Config key {key!r} must be {expected_type.__name__}.')
@@ -154,41 +163,16 @@ def _parse_config_value(key, value):
             f'Config key {key!r} must be one of: {valid}.')
     if attr == 'bits' and value not in [4, 8]:
         raise ValueError(f"Config key {key!r} must be one of: 4, 8.")
+    if attr in [
+        'min_tokens_per_line',
+        'max_tokens_per_line',
+    ] and value < 1:
+        raise ValueError(
+            f'Config key {key!r} must be positive.')
+    if attr == 'length_loss_weight' and value < 0:
+        raise ValueError(
+            f'Config key {key!r} must be non-negative.')
     return value
-
-
-def _parse_tokens_per_line_config_value(key, value):
-    if isinstance(value, bool) or not isinstance(value, (int, str)):
-        raise ValueError(f'Config key {key!r} must be int or range string.')
-    if isinstance(value, int):
-        return value
-
-    value = value.strip()
-    if value.lower() in ['none', 'null']:
-        return None
-    range_text, separator, weight_text = value.partition('@')
-    if separator:
-        try:
-            if float(weight_text) < 0:
-                raise ValueError
-        except ValueError:
-            raise ValueError(
-                f'Config key {key!r} must use a non-negative range weight.')
-    try:
-        if ':' in range_text:
-            lower_text, upper_text = range_text.split(':', 1)
-            lower, upper = int(lower_text), int(upper_text)
-        else:
-            lower = upper = int(range_text)
-    except ValueError:
-        raise ValueError(
-            f'Config key {key!r} must be int or range like "8:12@0.05".')
-    if lower < 1 or upper < lower:
-        raise ValueError(
-            f'Config key {key!r} must be positive with lower <= upper.')
-    if ':' in range_text or separator:
-        return value
-    return lower
 
 
 def _load_default_config():
@@ -221,7 +205,17 @@ def load_config(overrides=None, path=None):
     for override in overrides or []:
         attr, value = _parse_config_override(override)
         config[attr] = value
+    _validate_config(config)
     return config
+
+
+def _validate_config(config):
+    minimum = config.get('min_tokens_per_line')
+    maximum = config.get('max_tokens_per_line')
+    if minimum is not None and maximum is not None and minimum > maximum:
+        raise ValueError(
+            'Config key "optimize.min_tokens_per_line" must be less than or '
+            'equal to "optimize.max_tokens_per_line".')
 
 
 def apply_config(args, config):
@@ -312,8 +306,15 @@ def start_server(
         for k, v in form.items():
             if k in ['text', 'file_type']:
                 continue
-            if k in ['batch_size', 'overlap_divisor']:
+            if k in [
+                'batch_size',
+                'overlap_divisor',
+                'min_tokens_per_line',
+                'max_tokens_per_line',
+            ]:
                 v = int(v)
+            if k in ['length_loss_weight']:
+                v = float(v)
             kwargs[k] = v
         try:
             results = sembr(text, tokenizer, model, processor, **kwargs)
@@ -379,7 +380,9 @@ def wrap_kwargs(args):
     return {
         'batch_size': args.batch_size,
         'predict_func': args.predict_func,
-        'tokens_per_line': args.tokens_per_line,
+        'min_tokens_per_line': args.min_tokens_per_line,
+        'max_tokens_per_line': args.max_tokens_per_line,
+        'length_loss_weight': args.length_loss_weight,
         'overlap_divisor': args.overlap_divisor,
     }
 
