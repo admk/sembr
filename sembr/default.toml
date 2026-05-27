@@ -1,0 +1,26 @@
+# Default SemBr configuration; copy to $XDG_CONFIG_HOME/sembr/config.toml and edit as needed.
+[model]
+# Hugging Face model name or local model path.
+name = "admko/sembr2023-bert-small"
+# CUDA quantization bits; valid values are 4 or 8, and MPS is not supported.
+# bits = 4
+# Model dtype override, such as "float16" or "bfloat16"; unset uses torch.float32.
+# dtype = "float16"
+
+[inference]
+# Number of parsed paragraphs to process in each model batch.
+batch_size = 8
+# Divisor used to compute tiled-inference overlap from the model context length.
+overlap_divisor = 8
+
+[optimize]
+# Prediction algorithm: argmax, logit_adjustment, or greedy_linebreaks.
+algorithm = "argmax"
+# Token cap used by greedy_linebreaks; unset leaves greedy line breaking unconstrained.
+# tokens_per_line = 10
+
+[server]
+# API server IP address checked by clients.
+ip = "127.0.0.1"
+# API server port.
+port = 8384

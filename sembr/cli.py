@@ -1,6 +1,7 @@
 import os
 import sys
 import traceback
+from pathlib import Path
 
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
@@ -10,31 +11,48 @@ STDIN_TTY = os.isatty(sys.stdin.fileno())
 STDOUT_TTY = os.isatty(sys.stdout.fileno())
 STDERR_TTY = os.isatty(sys.stderr.fileno())
 
+CONFIG_KEY_MAP = {
+    'model.name': 'model_name',
+    'model.bits': 'bits',
+    'model.dtype': 'dtype',
+    'inference.batch_size': 'batch_size',
+    'inference.overlap_divisor': 'overlap_divisor',
+    'optimize.algorithm': 'predict_func',
+    'optimize.tokens_per_line': 'tokens_per_line',
+    'server.ip': 'server',
+    'server.port': 'port',
+}
+
+CONFIG_TYPES = {
+    'model_name': str,
+    'batch_size': int,
+    'overlap_divisor': int,
+    'predict_func': str,
+    'tokens_per_line': int,
+    'server': str,
+    'port': int,
+    'bits': int,
+    'dtype': str,
+}
+
+CONFIG_NULLABLE = {'tokens_per_line', 'bits', 'dtype'}
+PREDICT_FUNCS = ('argmax', 'logit_adjustment', 'greedy_linebreaks')
+
 
 def cli_parser():
     import argparse
     from . import __version__
-    from .inference import PREDICT_FUNC_MAP
     p = argparse.ArgumentParser(
         description='SemBr: Rewrap text with semantic breaks.')
-    model_name = 'admko/sembr2023-bert-small'
     p.add_argument('-V', '--version', action='version', version=__version__)
     p.add_argument(
         '-v', '--verbose', action='store_true', help='Enable verbose output')
-    p.add_argument('-m', '--model-name', type=str, default=model_name)
     p.add_argument('-i', '--input-file', type=str, default=None)
     p.add_argument('-o', '--output-file', type=str, default=None)
-    p.add_argument('-b', '--batch-size', type=int, default=8)
-    p.add_argument('-d', '--overlap-divisor', type=int, default=8)
     p.add_argument(
-        '-f', '--predict-func', type=str,
-        choices=PREDICT_FUNC_MAP, default='argmax')
-    p.add_argument('-t', '--tokens-per-line', type=int, default=None)
-    p.add_argument('-s', '--server', type=str, default='127.0.0.1')
+        '-c', '--config', action='append', default=[], metavar='KEY=VALUE',
+        help='Override a config value from $XDG_CONFIG_HOME/sembr/config.toml')
     p.add_argument('-l', '--listen', action='store_true')
-    p.add_argument('-p', '--port', type=int, default=8384)
-    p.add_argument('--bits', type=int, choices=[4, 8], default=None)
-    p.add_argument('--dtype', type=str, default=None)
     p.add_argument('--debug', action='store_true')
     p.add_argument('--mcp', action='store_true', help='Start MCP server mode')
     p.add_argument(
@@ -44,6 +62,123 @@ def cli_parser():
             'Auto-detect if not provided. '
             'File type must be provided if using stdin.'))
     return p
+
+
+def config_path():
+    config_home = os.environ.get('XDG_CONFIG_HOME')
+    if config_home is None:
+        config_home = os.path.join(Path.home(), '.config')
+    return Path(config_home) / 'sembr' / 'config.toml'
+
+
+def default_config_path():
+    return Path(__file__).with_name('default.toml')
+
+
+def _load_toml(path):
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
+    with path.open('rb') as f:
+        return tomllib.load(f)
+
+
+def _config_key_to_attr(key):
+    key = key.strip().replace('-', '_')
+    if key not in CONFIG_KEY_MAP:
+        valid = ', '.join(sorted(CONFIG_KEY_MAP))
+        raise ValueError(f'Unknown config key {key!r}. Valid keys: {valid}.')
+    return CONFIG_KEY_MAP[key]
+
+
+def _flatten_config_table(loaded):
+    valid_sections = sorted({key.split('.', 1)[0] for key in CONFIG_KEY_MAP})
+    config = {}
+    if not isinstance(loaded, dict):
+        raise ValueError('Config file must contain a TOML table.')
+    for section, values in loaded.items():
+        section = section.replace('-', '_')
+        if section not in valid_sections:
+            valid = ', '.join(valid_sections)
+            raise ValueError(
+                f'Unknown config section [{section}]. Valid sections: {valid}.')
+        if not isinstance(values, dict):
+            raise ValueError(f'Config section [{section}] must be a TOML table.')
+        for key, value in values.items():
+            config_key = f'{section}.{key}'.replace('-', '_')
+            attr = _config_key_to_attr(config_key)
+            config[attr] = _parse_config_value(config_key, value)
+    return config
+
+
+def _parse_config_value(key, value):
+    attr = _config_key_to_attr(key)
+    if value is None:
+        if attr in CONFIG_NULLABLE:
+            return None
+        raise ValueError(f'Config key {key!r} cannot be null.')
+    expected_type = CONFIG_TYPES[attr]
+    if expected_type is int and isinstance(value, bool):
+        raise ValueError(
+            f'Config key {key!r} must be {expected_type.__name__}.')
+    if isinstance(value, str) and expected_type is not str:
+        if value.lower() in ['none', 'null']:
+            return _parse_config_value(key, None)
+        try:
+            value = expected_type(value)
+        except ValueError:
+            raise ValueError(
+                f'Config key {key!r} must be {expected_type.__name__}.')
+    if not isinstance(value, expected_type):
+        raise ValueError(
+            f'Config key {key!r} must be {expected_type.__name__}.')
+    if attr == 'predict_func' and value not in PREDICT_FUNCS:
+        valid = ', '.join(PREDICT_FUNCS)
+        raise ValueError(
+            f'Config key {key!r} must be one of: {valid}.')
+    if attr == 'bits' and value not in [4, 8]:
+        raise ValueError(f"Config key {key!r} must be one of: 4, 8.")
+    return value
+
+
+def _load_default_config():
+    config = {key: None for key in CONFIG_NULLABLE}
+    config.update(_flatten_config_table(_load_toml(default_config_path())))
+    missing = sorted(set(CONFIG_TYPES) - set(config))
+    if missing:
+        raise RuntimeError(
+            f'Default config is missing required keys: {", ".join(missing)}.')
+    return config
+
+
+CONFIG_DEFAULTS = _load_default_config()
+
+
+def _parse_config_override(override):
+    if '=' not in override:
+        raise ValueError(
+            f'Config override {override!r} must use KEY=VALUE syntax.')
+    key, value = override.split('=', 1)
+    key = key.strip().replace('-', '_')
+    return _config_key_to_attr(key), _parse_config_value(key, value.strip())
+
+
+def load_config(overrides=None, path=None):
+    config = dict(CONFIG_DEFAULTS)
+    path = Path(path) if path is not None else config_path()
+    if path.exists():
+        config.update(_flatten_config_table(_load_toml(path)))
+    for override in overrides or []:
+        attr, value = _parse_config_override(override)
+        config[attr] = value
+    return config
+
+
+def apply_config(args, config):
+    for key, value in config.items():
+        setattr(args, key, value)
+    return args
 
 
 def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text=None, verbose=False):
@@ -58,19 +193,24 @@ def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text
 
     dtype = getattr(torch, dtype) if dtype is not None else torch.float32
     kwargs = {}
+    device = None
     if torch.cuda.is_available():
-        from transformers import BitsAndBytesConfig
         if bits == 4:
+            from transformers import BitsAndBytesConfig
             kwargs['quantization_config'] = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_compute_dtype=dtype)
+            kwargs['device_map'] = 'cuda'
         elif bits == 8:
+            from transformers import BitsAndBytesConfig
             kwargs['quantization_config'] = BitsAndBytesConfig(
                 load_in_8bit=True)
-        kwargs['device_map'] = 'cuda'
+            kwargs['device_map'] = 'cuda'
+        else:
+            device = 'cuda'
     elif torch.backends.mps.is_available():
         if bits in [4, 8]:
             raise RuntimeError('MPS does not support quantization.')
-        kwargs['device_map'] = 'mps'
+        device = 'mps'
 
     try:
         model = AutoModelForTokenClassification.from_pretrained(
@@ -79,6 +219,8 @@ def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text
         model = AutoModelForTokenClassification.from_pretrained(
             model_name, torch_dtype=dtype, local_files_only=True, **kwargs)
 
+    if device is not None:
+        model = model.to(device)
     model.eval()
     processor = get_processor(
         file_type=file_type, file_path=file_path, text=text, verbose=verbose)
@@ -196,6 +338,11 @@ def wrap_kwargs(args):
 def main() -> int:
     parser = cli_parser()
     args = parser.parse_args()
+    try:
+        apply_config(args, load_config(args.config))
+    except Exception as e:
+        print(f'Config error: {e}', file=sys.stderr)
+        return 2
     if args.debug:
         import debugpy
         debugpy.listen(5678)

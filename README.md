@@ -120,18 +120,64 @@ xclip -o | sembr | xclip -i
 ```
 
 Additionally,
-you can specify the following options
-to customize the behavior of SemBr:
+you can configure SemBr by creating
+`$XDG_CONFIG_HOME/sembr/config.toml`.
+If `XDG_CONFIG_HOME` is not set,
+SemBr reads `~/.config/sembr/config.toml`.
+The complete commented defaults
+are stored in [`sembr/default.toml`](sembr/default.toml).
+Copy that file to your config path
+and edit only the values you want to change.
 
-* `-m <model_name>`, `--model-name <model_name>`:
+To use it offline,
+you can download the model from Hugging Face
+and set `model.name` to the model directory,
+or prepend `TRANSFORMERS_OFFLINE=1` to the command
+to use the cached model.
+
+You can override config values for a single run
+with `-c` or `--config`:
+
+```shell
+sembr \
+  -c model.name=/path/to/model \
+  -c optimize.algorithm=greedy_linebreaks \
+  -c optimize.tokens_per_line=12
+```
+
+The supported config keys are:
+
+* `model.name`:
   The name of the Hugging Face model to use.
-  - The default is
-    [`admko/sembr2023-bert-small`][sembr-bert-small].
-  - To use it offline,
-    you can download the model from Hugging Face,
-    and then specify the path to the model directory,
-    or prepend `TRANSFORMERS_OFFLINE=1` to the command
-    to use the cached model.
+* `model.bits`:
+  Quantization bits for model weights (`4` or `8`).
+  Requires CUDA. Not supported on MPS.
+* `model.dtype`:
+  Data type for model weights (e.g. `float16`, `bfloat16`).
+  Default is `float32`.
+* `inference.batch_size`:
+  The number of lines to process in a batch.
+  Default is `8`.
+* `inference.overlap_divisor`:
+  The overlap divisor for tiled inference.
+  Default is `8`.
+* `optimize.algorithm`:
+  The prediction function to use.
+  Options are `argmax`, `logit_adjustment`, `greedy_linebreaks`.
+  Default is `argmax`.
+* `optimize.tokens_per_line`:
+  Maximum tokens per line for greedy line breaking.
+  This is only effective
+  when using the `greedy_linebreaks` prediction function.
+* `server.ip`:
+  The IP address of the SemBr API server.
+  The default is `127.0.0.1`.
+* `server.port`:
+  The port for the SemBr API server.
+  The default is `8384`.
+
+You can also specify the following command-line options:
+
 * `-l`, `--listen`:
   Serves the SemBr API on a local server.
   - Each instance of `sembr` run
@@ -140,32 +186,6 @@ to customize the behavior of SemBr:
   - This option is useful
     to avoid the time taken to initialize the model
     by keeping it in memory in a separate process.
-* `-p <port>`, `--port <port>`:
-  The port to serve the SemBr API on.
-  - The default is `8384`.
-* `-s <ip>`, `--server <ip>`:
-  The IP address to serve the SemBr API on.
-  - The default is `127.0.0.1`.
-* `-b <int>`, `--batch_size <int>`:
-  The number of lines to process in a batch.
-  Default is `8`.
-* `-d <int>`, `--overlap-divisor <int>`:
-  The overlap divisor for tiled inference.
-  Default is `8`.
-* `-f <func>`, `--predict-func <func>`:
-  The prediction function to use.
-  Options are `argmax`, `logit_adjustment`, `greedy_line_breaks`.
-  Default is `argmax`.
-* `-t <int>`, `--tokens-per-line <int>`:
-  Maximum tokens per line for greedy line breaking.
-  This is only effective
-  when using the `greedy_line_breaks` prediction function.
-* `--bits <4|8>`:
-  Quantization bits for model weights (4 or 8).
-  Requires CUDA. Not supported on MPS.
-* `--dtype <dtype>`:
-  Data type for model weights (e.g. `float16`, `bfloat16`).
-  Default is `float32`.
 * `--file-type <type>`:
   File type (`plaintext`, `latex`, `markdown`, etc.).
   Auto-detected using [Magika][magika] if not provided.
@@ -385,7 +405,7 @@ to save best models.
   - Some lines are too short or too long:
     - [x] Long lines can be penalized greedily
           by breaking lines with token counts
-          more than `--tokens-per-line`.
+          more than `optimize.tokens_per_line`.
     - [ ] Support `--words-per-line`.
     - [ ] Improve the algorithm to penalize short and long lines
           with a more sophisticated method.
