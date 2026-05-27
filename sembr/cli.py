@@ -7,9 +7,17 @@ from pathlib import Path
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-STDIN_TTY = os.isatty(sys.stdin.fileno())
-STDOUT_TTY = os.isatty(sys.stdout.fileno())
-STDERR_TTY = os.isatty(sys.stderr.fileno())
+
+def _safe_isatty(stream):
+    try:
+        return os.isatty(stream.fileno())
+    except (AttributeError, OSError):
+        return False
+
+
+STDIN_TTY = _safe_isatty(sys.stdin)
+STDOUT_TTY = _safe_isatty(sys.stdout)
+STDERR_TTY = _safe_isatty(sys.stderr)
 
 CONFIG_KEY_MAP = {
     'model.name': 'model_name',
