@@ -154,12 +154,18 @@ to customize the behavior of SemBr:
   Default is `8`.
 * `-f <func>`, `--predict-func <func>`:
   The prediction function to use.
-  Options are `argmax`, `logit_adjustment`, `greedy_line_breaks`.
+  Options are `argmax`, `logit_adjustment`, `greedy_linebreaks`,
+  and `balanced_linebreaks`.
   Default is `argmax`.
-* `-t <int>`, `--tokens-per-line <int>`:
-  Maximum tokens per line for greedy line breaking.
+* `-t <int|range>`, `--tokens-per-line <int|range>`:
+  Target tokens per line.
+  Use an integer such as `10`
+  or a range such as `8:12`.
+  Add `@weight` to tune the length penalty,
+  such as `8:12@0.05`.
   This is only effective
-  when using the `greedy_line_breaks` prediction function.
+  when using the `greedy_linebreaks`
+  or `balanced_linebreaks` prediction function.
 * `--bits <4|8>`:
   Quantization bits for model weights (4 or 8).
   Requires CUDA. Not supported on MPS.

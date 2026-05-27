@@ -29,7 +29,7 @@ def cli_parser():
     p.add_argument(
         '-f', '--predict-func', type=str,
         choices=PREDICT_FUNC_MAP, default='argmax')
-    p.add_argument('-t', '--tokens-per-line', type=int, default=None)
+    p.add_argument('-t', '--tokens-per-line', type=str, default=None)
     p.add_argument('-s', '--server', type=str, default='127.0.0.1')
     p.add_argument('-l', '--listen', action='store_true')
     p.add_argument('-p', '--port', type=int, default=8384)
@@ -121,7 +121,7 @@ def start_server(
         for k, v in form.items():
             if k in ['text', 'file_type']:
                 continue
-            if k in ['batch_size', 'tokens_per_line', 'overlap_divisor']:
+            if k in ['batch_size', 'overlap_divisor']:
                 v = int(v)
             kwargs[k] = v
         try:
