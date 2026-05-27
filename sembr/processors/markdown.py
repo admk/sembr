@@ -163,8 +163,10 @@ class MarkdownProcessor(BaseProcessor):
         lines, indents = self._process_indents(lines)
         base_indent = min(indents) if indents else 0
         indents = [i - base_indent for i in indents]
-        # Use space mode for line breaks, break at end
-        modes = ["space"] * (len(lines) - 1) + ["break"] if lines else ["break"]
+        # Preserve existing markdown line boundaries. Some inline regions include
+        # quote or list markers from following lines, and flattening them to
+        # spaces changes the parse tree.
+        modes = ["break"] * len(lines) if lines else ["break"]
         # Flatten with modes
         flat_lines, modes, mode_offsets = self._flatten_with_modes(lines, modes)
         return {
@@ -258,6 +260,10 @@ class MarkdownProcessor(BaseProcessor):
 
     def _generate_wrapped_text(self, region: Dict[str, Any]) -> str:
         """Generate wrapped text with continuation formatting. """
+        if "input_ids" not in region and all(
+            mode == "off" for mode in region["modes"]
+        ):
+            return region["original_text"].rstrip()
         words = region["words"]
         modes = region["modes"]
         indents = region["indents"]
@@ -270,16 +276,16 @@ class MarkdownProcessor(BaseProcessor):
         lines = self._indent_lines(lines, indents, base_indent)
         # Apply continuation formatting to wrapped lines
         if len(lines) > 1 and (cont_prefix or cont_indent):
-            # formatted_lines = [lines[0]]  # First line stays as-is
-            # for line in lines[1:]:
-            #     if line.strip():  # Only format non-empty lines
-            #         formatted_lines.append(
-            #             cont_indent + cont_prefix + line.lstrip())
-            #     else:
-            #         formatted_lines.append(line)  # Keep empty lines as-is
-            lines = [lines[0]] + [
-                cont_indent + cont_prefix + line.lstrip()
-                for line in lines[1:]]
+            formatted_lines = [lines[0]]
+            for line in lines[1:]:
+                stripped = line.lstrip()
+                has_marker = stripped.startswith(">") or re.match(
+                    r"^([-*+]|\d+\.)\s+", stripped)
+                if not stripped or has_marker:
+                    formatted_lines.append(line)
+                else:
+                    formatted_lines.append(cont_indent + cont_prefix + stripped)
+            lines = formatted_lines
         text = "\n".join(lines)
         # Apply reverse token replacements
         for k, v in self.reverse_replace_tokens.items():
