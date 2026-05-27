@@ -14,9 +14,10 @@ batch_size = 8
 overlap_divisor = 8
 
 [optimize]
-# Prediction algorithm: argmax, logit_adjustment, or greedy_linebreaks.
+# Prediction algorithm: argmax, logit_adjustment, greedy_linebreaks, or balanced_linebreaks.
 algorithm = "argmax"
-# Token cap used by greedy_linebreaks; unset leaves greedy line breaking unconstrained.
+# Token cap or range used by greedy_linebreaks and balanced_linebreaks.
+# For balanced_linebreaks, ranges can include a penalty weight, e.g. "8:12@0.05".
 # tokens_per_line = 10
 
 [server]

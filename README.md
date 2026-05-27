@@ -138,7 +138,7 @@ You can override config values for a single run
 with `-c` or `--config`:
 
 ```shell
-sembr -c model.name=/path/to/model -c optimize.algorithm=greedy_linebreaks -c optimize.tokens_per_line=12
+sembr -c model.name=/path/to/model -c optimize.algorithm=balanced_linebreaks -c optimize.tokens_per_line=8:12@0.05
 ```
 
 The supported config keys are:
@@ -159,12 +159,18 @@ The supported config keys are:
   Default is `8`.
 * `optimize.algorithm`:
   The prediction function to use.
-  Options are `argmax`, `logit_adjustment`, `greedy_linebreaks`.
+  Options are `argmax`, `logit_adjustment`, `greedy_linebreaks`,
+  and `balanced_linebreaks`.
   Default is `argmax`.
 * `optimize.tokens_per_line`:
-  Maximum tokens per line for greedy line breaking.
+  Target tokens per line.
+  Use an integer such as `10`
+  or a range string such as `"8:12"`.
+  Add `@weight` to tune the length penalty,
+  such as `"8:12@0.05"`.
   This is only effective
-  when using the `greedy_linebreaks` prediction function.
+  when using the `greedy_linebreaks`
+  or `balanced_linebreaks` prediction function.
 * `server.ip`:
   The IP address of the SemBr API server.
   The default is `127.0.0.1`.

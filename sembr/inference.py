@@ -1,7 +1,121 @@
+from collections import deque
+
 import torch
 from tqdm import trange
 
-from transformers import DataCollatorForTokenClassification
+
+DEFAULT_LENGTH_LOSS_WEIGHT = 0.05
+
+
+def _parse_tokens_per_line(tokens_per_line):
+    if tokens_per_line is None:
+        return None
+    length_loss_weight = DEFAULT_LENGTH_LOSS_WEIGHT
+    if isinstance(tokens_per_line, str):
+        tokens_per_line = tokens_per_line.strip()
+        if '@' in tokens_per_line:
+            tokens_per_line, length_loss_weight = tokens_per_line.split('@', 1)
+            length_loss_weight = float(length_loss_weight)
+        if ':' in tokens_per_line:
+            lower, upper = tokens_per_line.split(':', 1)
+            return int(lower), int(upper), length_loss_weight
+        return int(tokens_per_line), int(tokens_per_line), length_loss_weight
+    if isinstance(tokens_per_line, (tuple, list)):
+        if len(tokens_per_line) not in (2, 3):
+            raise ValueError(
+                'tokens_per_line range must have two or three values.')
+        if len(tokens_per_line) == 3:
+            length_loss_weight = float(tokens_per_line[2])
+        return int(tokens_per_line[0]), int(tokens_per_line[1]), length_loss_weight
+    tokens_per_line = int(tokens_per_line)
+    return tokens_per_line, tokens_per_line, length_loss_weight
+
+
+def _line_length_loss(length, lower, upper, weight=1.0):
+    if lower <= length <= upper:
+        return 0.0
+    if length < lower:
+        return float(weight * (lower - length) ** 2)
+    return float(weight * (length - upper) ** 2)
+
+
+def _boundary_loss(start, off_logits, break_logits):
+    if start == 0:
+        return 0.0
+    return float(off_logits[start].item() - break_logits[start].item())
+
+
+class _LiChaoLine:
+    def __init__(self, slope, intercept, index):
+        self.slope = slope
+        self.intercept = intercept
+        self.index = index
+
+    def value(self, x):
+        return self.slope * x + self.intercept
+
+
+class _LiChaoNode:
+    def __init__(self):
+        self.line = None
+        self.left = None
+        self.right = None
+
+
+class _LiChaoMin:
+    def __init__(self, x_left, x_right):
+        self.x_left = x_left
+        self.x_right = x_right
+        self.root = _LiChaoNode()
+        self.size = 0
+
+    def add_line(self, line):
+        self.size += 1
+        self._add_line(self.root, self.x_left, self.x_right, line)
+
+    def _add_line(self, node, left, right, line):
+        if node.line is None:
+            node.line = line
+            return
+
+        mid = (left + right) // 2
+        current = node.line
+        if line.value(mid) < current.value(mid):
+            node.line, line = line, current
+            current = node.line
+        if left == right:
+            return
+
+        if line.value(left) < current.value(left):
+            if node.left is None:
+                node.left = _LiChaoNode()
+            self._add_line(node.left, left, mid, line)
+        elif line.value(right) < current.value(right):
+            if node.right is None:
+                node.right = _LiChaoNode()
+            self._add_line(node.right, mid + 1, right, line)
+
+    def query(self, x):
+        if self.size == 0:
+            return float('inf'), -1
+        return self._query(self.root, self.x_left, self.x_right, x)
+
+    def _query(self, node, left, right, x):
+        if node is None:
+            return float('inf'), -1
+
+        best = (node.line.value(x), node.line.index)
+        if left == right:
+            return best
+
+        mid = (left + right) // 2
+        if x <= mid:
+            child_best = self._query(node.left, left, mid, x)
+        else:
+            child_best = self._query(node.right, mid + 1, right, x)
+        if child_best[0] < best[0]:
+            return child_best
+        return best
 
 
 def _tiled_inference(model, collator, results, batch_size, overlap_divisor):
@@ -69,8 +183,10 @@ def predict_logit_adjustment(logits, counts, tokens_per_line):
 
 
 def predict_greedy_linebreaks(logits, counts, tokens_per_line):
-    if tokens_per_line is None:
+    line_range = _parse_tokens_per_line(tokens_per_line)
+    if line_range is None:
         return logits.argmax(dim=2)
+    _, tokens_per_line, _ = line_range
     has_long_lines = True
     while has_long_lines:
         has_long_lines = False
@@ -93,10 +209,100 @@ def predict_greedy_linebreaks(logits, counts, tokens_per_line):
     return logits.argmax(dim=2)
 
 
+def predict_balanced_linebreaks(logits, counts, tokens_per_line):
+    line_range = _parse_tokens_per_line(tokens_per_line)
+    if line_range is None:
+        return logits.argmax(dim=2)
+    lower, upper, length_loss_weight = line_range
+    if lower < 1 or upper < lower or length_loss_weight < 0:
+        raise ValueError(
+            'tokens_per_line must be positive, or a range like "8:12@0.05".')
+
+    preds = torch.zeros(
+        logits.shape[:2], dtype=torch.long, device=logits.device)
+    for b in range(logits.shape[0]):
+        num_tokens = int(counts[b].sum().item())
+        if num_tokens == 0:
+            continue
+
+        row_logits = logits[b, :num_tokens]
+        break_logits, break_labels = row_logits[:, 1:].max(dim=1)
+        break_labels += 1
+        off_logits = row_logits[:, 0]
+        off_prefix = torch.cat([
+            off_logits.new_zeros(1),
+            torch.cumsum(off_logits, dim=0),
+        ])
+
+        dp = [float('inf')] * (num_tokens + 1)
+        prev = [-1] * (num_tokens + 1)
+        values = [float('inf')] * (num_tokens + 1)
+        range_min = deque()
+        long_hull = _LiChaoMin(0, max(0, num_tokens - upper))
+        dp[0] = 0.0
+        values[0] = 0.0
+        for end in range(1, num_tokens + 1):
+            range_start = end - lower
+            if range_start >= 0:
+                while (
+                    range_min
+                    and values[range_min[-1]] > values[range_start]
+                ):
+                    range_min.pop()
+                range_min.append(range_start)
+
+            long_start = end - upper - 1
+            if long_start >= 0:
+                line = _LiChaoLine(
+                    -2.0 * length_loss_weight * long_start,
+                    values[long_start] + length_loss_weight * long_start ** 2,
+                    long_start,
+                )
+                long_hull.add_line(line)
+
+            range_stop = end - upper
+            while range_min and range_min[0] < range_stop:
+                range_min.popleft()
+
+            candidates = []
+            for start in range(max(0, end - lower + 1), end):
+                length = end - start
+                loss = values[start] + _line_length_loss(
+                    length, lower, upper, length_loss_weight)
+                candidates.append((loss, start))
+
+            if range_min:
+                start = range_min[0]
+                candidates.append((values[start], start))
+
+            if long_hull.size:
+                x = end - upper
+                hull_value, start = long_hull.query(x)
+                candidates.append((
+                    hull_value + length_loss_weight * x ** 2,
+                    start,
+                ))
+
+            best_value, best_start = min(candidates)
+            dp[end] = best_value - float(off_prefix[end].item())
+            prev[end] = best_start
+            values[end] = dp[end] + float(off_prefix[end].item())
+            if end < num_tokens:
+                values[end] += _boundary_loss(end, off_logits, break_logits)
+
+        start = prev[num_tokens]
+        while start > 0:
+            preds[b, start] = break_labels[start]
+            start = prev[start]
+
+    return preds
+
+
 PREDICT_FUNC_MAP = {
     'argmax': predict_argmax,
     'logit_adjustment': predict_logit_adjustment,
     'greedy_linebreaks': predict_greedy_linebreaks,
+    'balanced_linebreaks': predict_balanced_linebreaks,
 }
 
 
@@ -107,6 +313,8 @@ def inference(
 ):
     if text.strip() == '':
         return []
+    from transformers import DataCollatorForTokenClassification
+
     collator = DataCollatorForTokenClassification(tokenizer, padding='longest')
     results = processor.parse_text(text, split=isinstance(text, str))
     results = processor.tokenize_with_modes(tokenizer, results)

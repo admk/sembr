@@ -53,6 +53,34 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
     }
 
 
+def test_load_config_accepts_balanced_linebreak_range(tmp_path):
+    path = tmp_path / 'config.toml'
+    path.write_text(
+        '\n'.join([
+            '[optimize]',
+            'algorithm = "balanced_linebreaks"',
+            'tokens_per_line = "8:12@0.05"',
+        ]),
+        encoding='utf-8')
+
+    config = load_config(path=path)
+
+    assert config['predict_func'] == 'balanced_linebreaks'
+    assert config['tokens_per_line'] == '8:12@0.05'
+
+
+def test_load_config_accepts_balanced_linebreak_range_override(tmp_path):
+    config = load_config(
+        [
+            'optimize.algorithm=balanced_linebreaks',
+            'optimize.tokens_per_line=8:12@0.05',
+        ],
+        path=tmp_path / 'missing.toml')
+
+    assert config['predict_func'] == 'balanced_linebreaks'
+    assert config['tokens_per_line'] == '8:12@0.05'
+
+
 def test_load_config_rejects_unknown_key(tmp_path):
     path = tmp_path / 'config.toml'
     path.write_text('[model]\nunknown = "value"', encoding='utf-8')

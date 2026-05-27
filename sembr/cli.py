@@ -44,7 +44,12 @@ CONFIG_TYPES = {
 }
 
 CONFIG_NULLABLE = {'tokens_per_line', 'bits', 'dtype'}
-PREDICT_FUNCS = ('argmax', 'logit_adjustment', 'greedy_linebreaks')
+PREDICT_FUNCS = (
+    'argmax',
+    'logit_adjustment',
+    'greedy_linebreaks',
+    'balanced_linebreaks',
+)
 
 
 def cli_parser():
@@ -126,6 +131,8 @@ def _parse_config_value(key, value):
         if attr in CONFIG_NULLABLE:
             return None
         raise ValueError(f'Config key {key!r} cannot be null.')
+    if attr == 'tokens_per_line':
+        return _parse_tokens_per_line_config_value(key, value)
     expected_type = CONFIG_TYPES[attr]
     if expected_type is int and isinstance(value, bool):
         raise ValueError(
@@ -148,6 +155,40 @@ def _parse_config_value(key, value):
     if attr == 'bits' and value not in [4, 8]:
         raise ValueError(f"Config key {key!r} must be one of: 4, 8.")
     return value
+
+
+def _parse_tokens_per_line_config_value(key, value):
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError(f'Config key {key!r} must be int or range string.')
+    if isinstance(value, int):
+        return value
+
+    value = value.strip()
+    if value.lower() in ['none', 'null']:
+        return None
+    range_text, separator, weight_text = value.partition('@')
+    if separator:
+        try:
+            if float(weight_text) < 0:
+                raise ValueError
+        except ValueError:
+            raise ValueError(
+                f'Config key {key!r} must use a non-negative range weight.')
+    try:
+        if ':' in range_text:
+            lower_text, upper_text = range_text.split(':', 1)
+            lower, upper = int(lower_text), int(upper_text)
+        else:
+            lower = upper = int(range_text)
+    except ValueError:
+        raise ValueError(
+            f'Config key {key!r} must be int or range like "8:12@0.05".')
+    if lower < 1 or upper < lower:
+        raise ValueError(
+            f'Config key {key!r} must be positive with lower <= upper.')
+    if ':' in range_text or separator:
+        return value
+    return lower
 
 
 def _load_default_config():
@@ -271,7 +312,7 @@ def start_server(
         for k, v in form.items():
             if k in ['text', 'file_type']:
                 continue
-            if k in ['batch_size', 'tokens_per_line', 'overlap_divisor']:
+            if k in ['batch_size', 'overlap_divisor']:
                 v = int(v)
             kwargs[k] = v
         try:
