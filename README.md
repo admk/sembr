@@ -32,21 +32,19 @@ and check consistency before and after edits.
 ### Installation
 
 SemBr is available as a [Python package on PyPI][pypi].
-To install it,
-simply run the following command in your terminal,
-assuming that you have Python 3.10 or later installed:
+For the default install:
 ```shell
 pip install sembr
 ```
-Alternatively,
-with [`uv`][uv]:
+With [`uv`][uv]:
 ```shell
-# either
-uv tool install sembr  # install
-sembr  # run
+uv tool install sembr
+```
 
-# or
-uvx sembr  # install and run directly
+For CUDA on Linux,
+install the CUDA extra:
+```shell
+uv tool install "sembr[cuda]"
 ```
 
 #### From GitHub (Latest Development Version)
@@ -71,15 +69,16 @@ cd sembr
 # Install in development mode
 pip install -e .
 
-# Or with uv
-uv pip install -e .
+# Or with uv.
+uv run sembr --help
 ```
 
 Note that the development version may include experimental features and could be less stable than the PyPI release.
 
 ### Supported Platforms
 
-SemBr is supported on Linux, Mac and Windows.
+SemBr is supported on Linux, macOS and Windows
+(well-tested on macOS).
 On machines with CUDA devices,
 or on Apple Silicon Macs,
 SemBr will use the GPU / Apple Neural Engine
@@ -139,10 +138,7 @@ You can override config values for a single run
 with `-c` or `--config`:
 
 ```shell
-sembr \
-  -c model.name=/path/to/model \
-  -c optimize.algorithm=greedy_linebreaks \
-  -c optimize.tokens_per_line=12
+sembr -c model.name=/path/to/model -c optimize.algorithm=greedy_linebreaks -c optimize.tokens_per_line=12
 ```
 
 The supported config keys are:

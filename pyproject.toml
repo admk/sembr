@@ -14,20 +14,20 @@ license = "MIT"
 license-files = ["LICEN[CS]E*"]
 requires-python = ">=3.10"
 dependencies = [
-    "accelerate",
     "fastmcp",
     "flask",
     "magika",
     "mcp[cli]",
-    "numpy",
     "pydantic",
     "requests",
-    "torch",
+    "torch; sys_platform == 'darwin' or sys_platform == 'linux'",
     "tqdm",
     "transformers",
     "tree-sitter>=0.25.0",
     "tree-sitter-markdown>=0.3.2",
+    "tomli; python_version < '3.11'",
 ]
+
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -42,9 +42,43 @@ sembr = "sembr.cli:main"
 Homepage = "https://github.com/admk/sembr"
 Issues = "https://github.com/admk/sembr/issues"
 
+[project.optional-dependencies]
+cuda = [
+    "accelerate; sys_platform == 'linux'",
+]
+quantization = [
+    "accelerate; sys_platform == 'linux'",
+    "bitsandbytes; sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+train = [
+    "accelerate; sys_platform == 'linux'",
+    "datasets; sys_platform == 'linux'",
+    "evaluate; sys_platform == 'linux'",
+    "numpy; sys_platform == 'linux'",
+]
+
 [tool.setuptools.packages.find]
 include = ["sembr", "sembr.*"]
 exclude = ["data*", "tests*"]
 
+[tool.setuptools.package-data]
+sembr = ["default.toml"]
+
 [tool.setuptools.dynamic]
 version = {attr = "sembr.__version__"}
+
+[tool.uv]
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'linux'",
+]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", marker = "sys_platform == 'linux'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
