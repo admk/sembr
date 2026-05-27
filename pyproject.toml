@@ -46,6 +46,9 @@ Issues = "https://github.com/admk/sembr/issues"
 cuda = [
     "accelerate; sys_platform == 'linux'",
 ]
+test = [
+    "pytest",
+]
 quantization = [
     "accelerate; sys_platform == 'linux'",
     "bitsandbytes; sys_platform == 'linux' and platform_machine == 'x86_64'",
@@ -66,6 +69,13 @@ sembr = ["default.toml"]
 
 [tool.setuptools.dynamic]
 version = {attr = "sembr.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--ignore=tests/test_actual_sembr.py",
+    "--ignore=tests/test_syntax_simple.py",
+]
 
 [tool.uv]
 environments = [
