@@ -5,7 +5,8 @@ from mcp.types import TextContent
 from fastmcp import FastMCP
 from fastmcp.tools.tool import ToolResult
 
-from .cli import apply_config, init, cli_parser, load_config, wrap_kwargs
+from .cli import init, cli_parser, wrap_kwargs
+from .config import apply_config
 
 
 class SembrModel:
@@ -40,7 +41,7 @@ def get_sembr_model() -> SembrModel:
         return _sembr_model
     parser = cli_parser()
     args, _ = parser.parse_known_args()
-    apply_config(args, load_config(args.config))
+    apply_config(args, args.config)
     tokenizer, model, _ = init(
         args.model_name, args.bits, args.dtype, args.file_type)
     kwargs = wrap_kwargs(args)

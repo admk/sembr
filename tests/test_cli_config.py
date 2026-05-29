@@ -3,7 +3,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from sembr.cli import CONFIG_DEFAULTS, cli_parser, config_path, load_config
+from sembr.cli import cli_parser
+from sembr.config import CONFIG_DEFAULTS, config_path, load_config
 
 
 def test_config_path_uses_xdg_config_home(monkeypatch, tmp_path):
