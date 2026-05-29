@@ -9,9 +9,9 @@ CONFIG_KEY_MAP = {
     'inference.batch_size': 'batch_size',
     'inference.overlap_divisor': 'overlap_divisor',
     'optimize.algorithm': 'predict_func',
-    'optimize.min_tokens_per_line': 'min_tokens_per_line',
-    'optimize.max_tokens_per_line': 'max_tokens_per_line',
-    'optimize.length_loss_weight': 'length_loss_weight',
+    'optimize.preferred_min_tokens_per_line': 'preferred_min_tokens_per_line',
+    'optimize.preferred_max_tokens_per_line': 'preferred_max_tokens_per_line',
+    'optimize.line_length_penalty_weight': 'line_length_penalty_weight',
     'server.ip': 'server',
     'server.port': 'port',
 }
@@ -21,9 +21,9 @@ CONFIG_TYPES = {
     'batch_size': int,
     'overlap_divisor': int,
     'predict_func': str,
-    'min_tokens_per_line': int,
-    'max_tokens_per_line': int,
-    'length_loss_weight': float,
+    'preferred_min_tokens_per_line': int,
+    'preferred_max_tokens_per_line': int,
+    'line_length_penalty_weight': float,
     'server': str,
     'port': int,
     'bits': int,
@@ -31,8 +31,8 @@ CONFIG_TYPES = {
 }
 
 CONFIG_NULLABLE = {
-    'min_tokens_per_line',
-    'max_tokens_per_line',
+    'preferred_min_tokens_per_line',
+    'preferred_max_tokens_per_line',
     'bits',
     'dtype',
 }
@@ -123,12 +123,12 @@ def _parse_config_value(key, value):
     if attr == 'bits' and value not in [4, 8]:
         raise ValueError(f"Config key {key!r} must be one of: 4, 8.")
     if attr in [
-        'min_tokens_per_line',
-        'max_tokens_per_line',
+        'preferred_min_tokens_per_line',
+        'preferred_max_tokens_per_line',
     ] and value < 1:
         raise ValueError(
             f'Config key {key!r} must be positive.')
-    if attr == 'length_loss_weight' and value < 0:
+    if attr == 'line_length_penalty_weight' and value < 0:
         raise ValueError(
             f'Config key {key!r} must be non-negative.')
     return value
@@ -169,12 +169,13 @@ def load_config(overrides=None, path=None):
 
 
 def _validate_config(config):
-    minimum = config.get('min_tokens_per_line')
-    maximum = config.get('max_tokens_per_line')
+    minimum = config.get('preferred_min_tokens_per_line')
+    maximum = config.get('preferred_max_tokens_per_line')
     if minimum is not None and maximum is not None and minimum > maximum:
         raise ValueError(
-            'Config key "optimize.min_tokens_per_line" must be less than or '
-            'equal to "optimize.max_tokens_per_line".')
+            'Config key "optimize.preferred_min_tokens_per_line" '
+            'must be less than or equal to '
+            '"optimize.preferred_max_tokens_per_line".')
 
 
 def apply_config(args, overrides=None, path=None):

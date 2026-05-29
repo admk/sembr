@@ -18,10 +18,10 @@ overlap_divisor = 8
 # Prediction algorithm, supports:
 #   argmax, logit_adjustment, greedy_linebreaks, or balanced_linebreaks.
 algorithm = "argmax"
-# min_tokens_per_line = 8  # Lower bound
-# max_tokens_per_line = 12  # Upper bound
-# Penalty weight for balanced_linebreaks line lengths outside the target bounds.
-length_loss_weight = 0.05
+# preferred_min_tokens_per_line = 8  # Preferred lower target
+# preferred_max_tokens_per_line = 12  # Preferred upper target
+# Penalty weight for line lengths outside the preferred range.
+line_length_penalty_weight = 0.05
 
 [server]
 # API server IP address checked by clients.

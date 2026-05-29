@@ -21,7 +21,7 @@ def test_balanced_linebreaks_uses_best_break_label():
     counts = torch.ones((1, 8), dtype=torch.long)
 
     preds = predict_balanced_linebreaks(
-        logits, counts, max_tokens_per_line=4)
+        logits, counts, preferred_max_tokens_per_line=4)
 
     assert preds.tolist() == [[0, 0, 0, 0, 2, 0, 0, 0]]
 
@@ -35,22 +35,22 @@ def test_balanced_linebreaks_accepts_line_length_bounds():
     preds = predict_balanced_linebreaks(
         logits,
         counts,
-        min_tokens_per_line=4,
-        max_tokens_per_line=5,
-        length_loss_weight=1.0,
+        preferred_min_tokens_per_line=4,
+        preferred_max_tokens_per_line=5,
+        line_length_penalty_weight=1.0,
     )
 
     assert preds.tolist() == [[0, 0, 0, 0, 1, 0, 0, 0, 0]]
 
 
-def test_greedy_linebreaks_uses_max_tokens_per_line():
+def test_greedy_linebreaks_uses_preferred_max_tokens_per_line():
     logits = torch.zeros((1, 4, 2))
     logits[:, :, 0] = 1.0
     counts = torch.ones((1, 4), dtype=torch.long)
 
     uncapped = predict_greedy_linebreaks(logits.clone(), counts)
     capped = predict_greedy_linebreaks(
-        logits.clone(), counts, max_tokens_per_line=3)
+        logits.clone(), counts, preferred_max_tokens_per_line=3)
 
     assert uncapped.tolist() == [[0, 0, 0, 0]]
     assert capped.sum().item() == 1
@@ -100,16 +100,16 @@ def test_balanced_linebreaks_matches_brute_force_small_cases():
     preds = predict_balanced_linebreaks(
         logits,
         counts,
-        min_tokens_per_line=3,
-        max_tokens_per_line=5,
-        length_loss_weight=0.05,
+        preferred_min_tokens_per_line=3,
+        preferred_max_tokens_per_line=5,
+        line_length_penalty_weight=0.05,
     )
     expected = _predict_balanced_linebreaks_brute(logits, counts, (3, 5, 0.05))
 
     assert preds.tolist() == expected.tolist()
 
 
-def test_balanced_linebreaks_length_weight_can_be_tuned():
+def test_balanced_linebreaks_line_length_penalty_can_be_tuned():
     logits = torch.zeros((1, 12, 2))
     logits[:, :, 0] = 2.0
     logits[:, :, 1] = -2.0
@@ -119,16 +119,16 @@ def test_balanced_linebreaks_length_weight_can_be_tuned():
     soft_preds = predict_balanced_linebreaks(
         logits,
         counts,
-        min_tokens_per_line=5,
-        max_tokens_per_line=6,
-        length_loss_weight=0.05,
+        preferred_min_tokens_per_line=5,
+        preferred_max_tokens_per_line=6,
+        line_length_penalty_weight=0.05,
     )
     hard_preds = predict_balanced_linebreaks(
         logits,
         counts,
-        min_tokens_per_line=5,
-        max_tokens_per_line=6,
-        length_loss_weight=1.0,
+        preferred_min_tokens_per_line=5,
+        preferred_max_tokens_per_line=6,
+        line_length_penalty_weight=1.0,
     )
 
     assert soft_preds[0, 3].item() == 1

@@ -142,9 +142,9 @@ with `-c` or `--config`:
 sembr \
   -c model.name=/path/to/model \
   -c optimize.algorithm=balanced_linebreaks \
-  -c optimize.min_tokens_per_line=8 \
-  -c optimize.max_tokens_per_line=12 \
-  -c optimize.length_loss_weight=0.05
+  -c optimize.preferred_min_tokens_per_line=8 \
+  -c optimize.preferred_max_tokens_per_line=12 \
+  -c optimize.line_length_penalty_weight=0.05
 ```
 
 The supported config keys are:
@@ -168,13 +168,12 @@ The supported config keys are:
   Options are `argmax`, `logit_adjustment`, `greedy_linebreaks`,
   and `balanced_linebreaks`.
   Default is `argmax`.
-* `optimize.min_tokens_per_line`:
-  Lower target bound for `balanced_linebreaks`.
-* `optimize.max_tokens_per_line`:
-  Token cap used by `greedy_linebreaks`
-  and upper target bound for `balanced_linebreaks`.
-* `optimize.length_loss_weight`:
-  Penalty weight for balanced line lengths outside the target bounds.
+* `optimize.preferred_min_tokens_per_line`:
+  Preferred lower line length target.
+* `optimize.preferred_max_tokens_per_line`:
+  Preferred upper line length target.
+* `optimize.line_length_penalty_weight`:
+  Penalty weight for line lengths outside the preferred range.
   The default is `0.05`.
 * `server.ip`:
   The IP address of the SemBr API server.
@@ -412,7 +411,7 @@ to save best models.
   - Some lines are too short or too long:
     - [x] Long lines can be penalized greedily
           by breaking lines with token counts
-          more than `optimize.max_tokens_per_line`.
+          more than `optimize.preferred_max_tokens_per_line`.
     - [ ] Support `--words-per-line`.
     - [ ] Improve the algorithm to penalize short and long lines
           with a more sophisticated method.

@@ -4,7 +4,7 @@ import torch
 from tqdm import trange
 
 
-DEFAULT_LENGTH_LOSS_WEIGHT = 0.05
+DEFAULT_LINE_LENGTH_PENALTY_WEIGHT = 0.05
 
 
 def _parse_positive_int(name, value):
@@ -23,26 +23,29 @@ def _parse_positive_int(name, value):
 
 
 def _line_length_bounds(
-    min_tokens_per_line=None,
-    max_tokens_per_line=None,
+    preferred_min_tokens_per_line=None,
+    preferred_max_tokens_per_line=None,
 ):
-    min_tokens_per_line = _parse_positive_int(
-        'min_tokens_per_line', min_tokens_per_line)
-    max_tokens_per_line = _parse_positive_int(
-        'max_tokens_per_line', max_tokens_per_line)
+    preferred_min_tokens_per_line = _parse_positive_int(
+        'preferred_min_tokens_per_line', preferred_min_tokens_per_line)
+    preferred_max_tokens_per_line = _parse_positive_int(
+        'preferred_max_tokens_per_line', preferred_max_tokens_per_line)
 
-    if min_tokens_per_line is None and max_tokens_per_line is None:
+    if (
+        preferred_min_tokens_per_line is None
+        and preferred_max_tokens_per_line is None
+    ):
         return None
-    elif min_tokens_per_line is None:
-        min_tokens_per_line = max_tokens_per_line
-    elif max_tokens_per_line is None:
-        max_tokens_per_line = min_tokens_per_line
+    elif preferred_min_tokens_per_line is None:
+        preferred_min_tokens_per_line = preferred_max_tokens_per_line
+    elif preferred_max_tokens_per_line is None:
+        preferred_max_tokens_per_line = preferred_min_tokens_per_line
 
-    if min_tokens_per_line > max_tokens_per_line:
+    if preferred_min_tokens_per_line > preferred_max_tokens_per_line:
         raise ValueError(
-            'min_tokens_per_line must be less than or equal to '
-            'max_tokens_per_line.')
-    return min_tokens_per_line, max_tokens_per_line
+            'preferred_min_tokens_per_line must be less than or equal to '
+            'preferred_max_tokens_per_line.')
+    return preferred_min_tokens_per_line, preferred_max_tokens_per_line
 
 
 def _line_length_loss(length, lower, upper, weight=1.0):
@@ -197,14 +200,14 @@ def predict_logit_adjustment(logits, counts, **kwargs):
 
 
 def predict_greedy_linebreaks(
-    logits, counts, max_tokens_per_line=None, **kwargs
+    logits, counts, preferred_max_tokens_per_line=None, **kwargs
 ):
     bounds = _line_length_bounds(
-        max_tokens_per_line=max_tokens_per_line,
+        preferred_max_tokens_per_line=preferred_max_tokens_per_line,
     )
     if bounds is None:
         return logits.argmax(dim=2)
-    _, max_tokens_per_line = bounds
+    _, preferred_max_tokens_per_line = bounds
     has_long_lines = True
     while has_long_lines:
         has_long_lines = False
@@ -215,7 +218,9 @@ def predict_greedy_linebreaks(
             starts = torch.cat([
                 torch.zeros(1, device=stops.device, dtype=stops.dtype),
                 stops[:-1]])
-            long_lines = (modes == 0) & (repeats > max_tokens_per_line)
+            long_lines = (
+                (modes == 0) & (repeats > preferred_max_tokens_per_line)
+            )
             if long_lines.any():
                 has_long_lines = True
             starts, stops = starts[long_lines], stops[long_lines]
@@ -228,18 +233,20 @@ def predict_greedy_linebreaks(
 
 
 def predict_balanced_linebreaks(
-    logits, counts, min_tokens_per_line=None, max_tokens_per_line=None,
-    length_loss_weight=DEFAULT_LENGTH_LOSS_WEIGHT,
+    logits, counts,
+    preferred_min_tokens_per_line=None,
+    preferred_max_tokens_per_line=None,
+    line_length_penalty_weight=DEFAULT_LINE_LENGTH_PENALTY_WEIGHT,
 ):
     bounds = _line_length_bounds(
-        min_tokens_per_line=min_tokens_per_line,
-        max_tokens_per_line=max_tokens_per_line,
+        preferred_min_tokens_per_line=preferred_min_tokens_per_line,
+        preferred_max_tokens_per_line=preferred_max_tokens_per_line,
     )
     if bounds is None:
         return logits.argmax(dim=2)
     lower, upper = bounds
-    if length_loss_weight < 0:
-        raise ValueError('length_loss_weight must be non-negative.')
+    if line_length_penalty_weight < 0:
+        raise ValueError('line_length_penalty_weight must be non-negative.')
 
     preds = torch.zeros(
         logits.shape[:2], dtype=torch.long, device=logits.device)
@@ -277,8 +284,11 @@ def predict_balanced_linebreaks(
             long_start = end - upper - 1
             if long_start >= 0:
                 line = _LiChaoLine(
-                    -2.0 * length_loss_weight * long_start,
-                    values[long_start] + length_loss_weight * long_start ** 2,
+                    -2.0 * line_length_penalty_weight * long_start,
+                    (
+                        values[long_start]
+                        + line_length_penalty_weight * long_start ** 2
+                    ),
                     long_start,
                 )
                 long_hull.add_line(line)
@@ -291,7 +301,7 @@ def predict_balanced_linebreaks(
             for start in range(max(0, end - lower + 1), end):
                 length = end - start
                 loss = values[start] + _line_length_loss(
-                    length, lower, upper, length_loss_weight)
+                    length, lower, upper, line_length_penalty_weight)
                 candidates.append((loss, start))
 
             if range_min:
@@ -302,7 +312,7 @@ def predict_balanced_linebreaks(
                 x = end - upper
                 hull_value, start = long_hull.query(x)
                 candidates.append((
-                    hull_value + length_loss_weight * x ** 2,
+                    hull_value + line_length_penalty_weight * x ** 2,
                     start,
                 ))
 
@@ -333,8 +343,8 @@ def inference(
     text, tokenizer, model, processor,
     predict_func='argmax', batch_size=8, overlap_divisor=8,
     *,
-    min_tokens_per_line=None, max_tokens_per_line=None,
-    length_loss_weight=DEFAULT_LENGTH_LOSS_WEIGHT,
+    preferred_min_tokens_per_line=None, preferred_max_tokens_per_line=None,
+    line_length_penalty_weight=DEFAULT_LINE_LENGTH_PENALTY_WEIGHT,
 ):
     if text.strip() == '':
         return []
@@ -348,9 +358,9 @@ def inference(
     preds = PREDICT_FUNC_MAP[predict_func](
         logits,
         counts,
-        min_tokens_per_line=min_tokens_per_line,
-        max_tokens_per_line=max_tokens_per_line,
-        length_loss_weight=length_loss_weight,
+        preferred_min_tokens_per_line=preferred_min_tokens_per_line,
+        preferred_max_tokens_per_line=preferred_max_tokens_per_line,
+        line_length_penalty_weight=line_length_penalty_weight,
     )
     return _format_labels(model.config.id2label, preds, counts, results)
 
@@ -359,13 +369,13 @@ def sembr(
     text, tokenizer, model, processor,
     predict_func='argmax', batch_size=8, overlap_divisor=8,
     *,
-    min_tokens_per_line=None, max_tokens_per_line=None,
-    length_loss_weight=DEFAULT_LENGTH_LOSS_WEIGHT,
+    preferred_min_tokens_per_line=None, preferred_max_tokens_per_line=None,
+    line_length_penalty_weight=DEFAULT_LINE_LENGTH_PENALTY_WEIGHT,
 ):
     results = inference(
         text, tokenizer, model, processor, predict_func,
         batch_size, overlap_divisor,
-        min_tokens_per_line=min_tokens_per_line,
-        max_tokens_per_line=max_tokens_per_line,
-        length_loss_weight=length_loss_weight)
+        preferred_min_tokens_per_line=preferred_min_tokens_per_line,
+        preferred_max_tokens_per_line=preferred_max_tokens_per_line,
+        line_length_penalty_weight=line_length_penalty_weight)
     return processor.generate(results, join=True)

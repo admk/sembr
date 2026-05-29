@@ -28,7 +28,7 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
             '',
             '[optimize]',
             'algorithm = "greedy_linebreaks"',
-            'max_tokens_per_line = 12',
+            'preferred_max_tokens_per_line = 12',
             '',
             '[server]',
             'ip = "0.0.0.0"',
@@ -37,7 +37,7 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
         encoding='utf-8')
 
     config = load_config(
-        ['inference.batch-size=16', 'optimize.max_tokens_per_line=null', 'model.bits=4'],
+        ['inference.batch-size=16', 'optimize.preferred_max_tokens_per_line=null', 'model.bits=4'],
         path=path)
 
     assert config == {
@@ -46,7 +46,7 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
         'batch_size': 16,
         'overlap_divisor': 2,
         'predict_func': 'greedy_linebreaks',
-        'max_tokens_per_line': None,
+        'preferred_max_tokens_per_line': None,
         'server': '0.0.0.0',
         'port': 9000,
         'bits': 4,
@@ -60,34 +60,34 @@ def test_load_config_accepts_balanced_linebreak_range(tmp_path):
         '\n'.join([
             '[optimize]',
             'algorithm = "balanced_linebreaks"',
-            'min_tokens_per_line = 8',
-            'max_tokens_per_line = 12',
-            'length_loss_weight = 0.05',
+            'preferred_min_tokens_per_line = 8',
+            'preferred_max_tokens_per_line = 12',
+            'line_length_penalty_weight = 0.05',
         ]),
         encoding='utf-8')
 
     config = load_config(path=path)
 
     assert config['predict_func'] == 'balanced_linebreaks'
-    assert config['min_tokens_per_line'] == 8
-    assert config['max_tokens_per_line'] == 12
-    assert config['length_loss_weight'] == 0.05
+    assert config['preferred_min_tokens_per_line'] == 8
+    assert config['preferred_max_tokens_per_line'] == 12
+    assert config['line_length_penalty_weight'] == 0.05
 
 
 def test_load_config_accepts_balanced_linebreak_range_override(tmp_path):
     config = load_config(
         [
             'optimize.algorithm=balanced_linebreaks',
-            'optimize.min_tokens_per_line=8',
-            'optimize.max_tokens_per_line=12',
-            'optimize.length_loss_weight=0.05',
+            'optimize.preferred_min_tokens_per_line=8',
+            'optimize.preferred_max_tokens_per_line=12',
+            'optimize.line_length_penalty_weight=0.05',
         ],
         path=tmp_path / 'missing.toml')
 
     assert config['predict_func'] == 'balanced_linebreaks'
-    assert config['min_tokens_per_line'] == 8
-    assert config['max_tokens_per_line'] == 12
-    assert config['length_loss_weight'] == 0.05
+    assert config['preferred_min_tokens_per_line'] == 8
+    assert config['preferred_max_tokens_per_line'] == 12
+    assert config['line_length_penalty_weight'] == 0.05
 
 
 def test_load_config_rejects_invalid_line_length_bounds(tmp_path):
@@ -95,15 +95,15 @@ def test_load_config_rejects_invalid_line_length_bounds(tmp_path):
     path.write_text(
         '\n'.join([
             '[optimize]',
-            'min_tokens_per_line = 12',
-            'max_tokens_per_line = 8',
+            'preferred_min_tokens_per_line = 12',
+            'preferred_max_tokens_per_line = 8',
         ]),
         encoding='utf-8')
 
     try:
         load_config(path=path)
     except ValueError as e:
-        assert 'optimize.min_tokens_per_line' in str(e)
+        assert 'optimize.preferred_min_tokens_per_line' in str(e)
     else:
         raise AssertionError('load_config accepted invalid line length bounds')
 

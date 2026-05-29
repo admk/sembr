@@ -139,11 +139,11 @@ def start_server(
             if k in [
                 'batch_size',
                 'overlap_divisor',
-                'min_tokens_per_line',
-                'max_tokens_per_line',
+                'preferred_min_tokens_per_line',
+                'preferred_max_tokens_per_line',
             ]:
                 v = int(v)
-            if k in ['length_loss_weight']:
+            if k in ['line_length_penalty_weight']:
                 v = float(v)
             kwargs[k] = v
         try:
@@ -210,11 +210,17 @@ def wrap_kwargs(args):
     return {
         'batch_size': args.batch_size,
         'predict_func': args.predict_func,
-        'min_tokens_per_line': args.min_tokens_per_line,
-        'max_tokens_per_line': args.max_tokens_per_line,
-        'length_loss_weight': args.length_loss_weight,
+        'preferred_min_tokens_per_line': args.preferred_min_tokens_per_line,
+        'preferred_max_tokens_per_line': args.preferred_max_tokens_per_line,
+        'line_length_penalty_weight': args.line_length_penalty_weight,
         'overlap_divisor': args.overlap_divisor,
     }
+
+
+def print_args(args):
+    from pprint import pprint
+    print('Arguments:', file=sys.stderr)
+    pprint(vars(args), stream=sys.stderr, sort_dicts=True)
 
 
 def main() -> int:
@@ -225,6 +231,8 @@ def main() -> int:
     except Exception as e:
         print(f'Config error: {e}', file=sys.stderr)
         return 2
+    if args.verbose:
+        print_args(args)
     if args.debug:
         import debugpy
         debugpy.listen(5678)
