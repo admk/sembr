@@ -1,5 +1,9 @@
+import os
+
+
 __toolname__ = __name__
-__version__ = "0.2.4"
+_BASE_VERSION = "0.2.4"
+__version__ = _BASE_VERSION + os.environ.get("SEMBR_VERSION_SUFFIX", "")
 __author__ = "admk"
 __license__ = "MIT"
 __url__ = f"https://github.com/admk/{__name__}"

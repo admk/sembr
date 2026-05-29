@@ -61,12 +61,21 @@ PREDICT_FUNCS = (
 )
 
 
+def package_version():
+    try:
+        from importlib.metadata import PackageNotFoundError, version
+        return version('sembr')
+    except PackageNotFoundError:
+        from . import __version__
+        return __version__
+
+
 def cli_parser():
     import argparse
-    from . import __version__
     p = argparse.ArgumentParser(
         description='SemBr: Rewrap text with semantic breaks.')
-    p.add_argument('-V', '--version', action='version', version=__version__)
+    p.add_argument(
+        '-V', '--version', action='version', version=package_version())
     p.add_argument(
         '-v', '--verbose', action='store_true', help='Enable verbose output')
     p.add_argument('-i', '--input-file', type=str, default=None)

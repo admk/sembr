@@ -59,23 +59,22 @@ uv tool install git+https://github.com/admk/sembr.git
 uvx --from git+https://github.com/admk/sembr.git sembr
 ```
 
-Alternatively, clone and install in development mode:
-
-```shell
-# Clone the repository
-git clone https://github.com/admk/sembr.git
-cd sembr
-
-# Install in development mode
-pip install -e .
-
-# Or with uv.
-uv run sembr --help
-```
-
 Note that the development version
 may include experimental features
 and could be less stable than the PyPI release.
+
+#### Development
+
+To develop this project,
+clone and install in development mode:
+
+```shell
+git clone https://github.com/admk/sembr.git
+cd sembr
+SEMBR_VERSION_SUFFIX=.dev0 \
+  uv tool install --editable . --force --refresh-package sembr
+```
+
 
 ### Supported Platforms
 

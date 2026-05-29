@@ -1,6 +1,0 @@
-accelerate
-torch
-datasets
-transformers
-tree-sitter
-tree-sitter-markdown
