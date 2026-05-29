@@ -198,6 +198,30 @@ You can also specify the following command-line options:
 * `--mcp`:
   Start MCP server mode instead of processing text.
 
+#### Balanced line breaks
+
+The `balanced_linebreaks` algorithm
+optimizes line breaks with dynamic programming
+over each parsed paragraph.
+
+It scores candidate lines with the model logits
+and adds a quadratic penalty
+when the token count falls outside
+`optimize.preferred_min_tokens_per_line`
+and `optimize.preferred_max_tokens_per_line`.
+Larger `optimize.line_length_penalty_weight` values
+make the algorithm favor the preferred range more strongly.
+
+For a paragraph with `n` tokens,
+the implementation uses prefix sums,
+a monotonic queue for the no-penalty range,
+and a Li Chao tree for long-line penalties.
+The usual complexity is `O(n log n)`
+when the preferred lower target is small and fixed;
+the worst case is `O(n^2)`
+if that target grows with paragraph length.
+Memory usage is `O(n)` per paragraph,
+not counting model logits.
 
 #### MCP Server
 
