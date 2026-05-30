@@ -21,18 +21,19 @@ class BaseProcessor(ABC):
 
         Args:
             spaces: Number of spaces per indent level
-            indent_type: Indentation unit to emit, either "space" or "tab"
+            indent_type: Indentation unit to emit, "space", "tab", or "auto"
         """
         if isinstance(spaces, str):
             if spaces != "auto":
                 raise ValueError('spaces must be positive or "auto".')
         elif spaces < 1:
             raise ValueError("spaces must be positive.")
-        if indent_type not in ["space", "tab"]:
-            raise ValueError('indent_type must be "space" or "tab".')
+        if indent_type not in ["space", "tab", "auto"]:
+            raise ValueError('indent_type must be "space", "tab", or "auto".')
         self.spaces = spaces
         self.indent_type = indent_type
         self._active_spaces = None
+        self._active_indent_type = None
         self.replace_tokens = self._get_replace_tokens()
         self.reverse_replace_tokens = {
             v: k for k, v in self.replace_tokens.items()
@@ -108,6 +109,25 @@ class BaseProcessor(ABC):
                 return candidate
         return 4
 
+    def _detect_indent_type(self, text: str) -> str:
+        space_lines = 0
+        tab_lines = 0
+        for line in text.splitlines():
+            if line.startswith("\t"):
+                tab_lines += 1
+            elif line.startswith(" "):
+                space_lines += 1
+        if tab_lines > space_lines:
+            return "tab"
+        return "space"
+
+    def _resolve_indent_type(self, text: str | None = None) -> str:
+        if self.indent_type != "auto":
+            return self.indent_type
+        if text is None:
+            return "space"
+        return self._detect_indent_type(text)
+
     def _resolve_spaces(self, text: str | None = None) -> int:
         if isinstance(self.spaces, int):
             return self.spaces
@@ -116,8 +136,16 @@ class BaseProcessor(ABC):
         return self._detect_spaces(text)
 
     def _prepare_text(self, text: str) -> str:
+        self._active_indent_type = self._resolve_indent_type(text)
         self._active_spaces = self._resolve_spaces(text)
         return self._normalize_tabs(text)
+
+    def _indent_type(self) -> str:
+        if self._active_indent_type is not None:
+            return self._active_indent_type
+        if self.indent_type != "auto":
+            return self.indent_type
+        return "space"
 
     def _spaces(self) -> int:
         if self._active_spaces is not None:
@@ -127,16 +155,24 @@ class BaseProcessor(ABC):
         return 4
 
     def _indent_unit(self) -> str:
-        if self.indent_type == "tab":
+        if self._indent_type() == "tab":
             return "\t"
         return " " * self._spaces()
 
     def _normalize_tabs(self, text: str) -> str:
-        if self.indent_type == "tab":
+        if self._indent_type() == "tab":
             return text
         return text.replace("\t", " " * self._spaces())
 
     def _split_indent(self, line: str) -> tuple[int, str]:
+        if self._indent_type() == "tab":
+            indent_level = 0
+            for c in line:
+                if c != "\t":
+                    break
+                indent_level += 1
+            return indent_level, line[indent_level:].rstrip()
+
         columns = 0
         prefix_end = 0
         for c in line:

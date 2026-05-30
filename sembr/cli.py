@@ -139,7 +139,7 @@ def start_server(
             if k in ['text', 'file_type']:
                 continue
             if k == 'spaces':
-                proc_kwargs[k] = int(v)
+                proc_kwargs[k] = v if v == 'auto' else int(v)
                 continue
             if k == 'indent_type':
                 proc_kwargs[k] = v

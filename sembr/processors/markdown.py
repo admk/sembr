@@ -24,7 +24,7 @@ class MarkdownProcessor(BaseProcessor):
     only to the text.
     """
 
-    def __init__(self, spaces: int = 4, indent_type: str = "space"):
+    def __init__(self, spaces: int | str = 4, indent_type: str = "space"):
         super().__init__(spaces, indent_type)
 
         # Initialize tree-sitter parser

@@ -176,11 +176,13 @@ The supported config keys are:
   Penalty weight for line lengths outside the preferred range.
   The default is `0.05`.
 * `format.num_spaces`:
-  Number of spaces represented by one indentation level.
-  The default is `4`.
+  Number of spaces represented by one indentation level,
+  or `auto` to detect `2`, `4`, or `8` from the input.
+  The default is `auto`.
 * `format.indent_type`:
   Indentation unit to emit.
-  Options are `space` and `tab`.
+  Options are `space`, `tab`, and `auto`.
+  `auto` detects space or tab indentation from the input.
   The default is `space`.
 * `server.ip`:
   The IP address of the SemBr API server.
@@ -443,8 +445,8 @@ to save best models.
     - [x] Long lines can be penalized greedily
           by breaking lines with token counts
           more than `optimize.preferred_max_tokens_per_line`.
-    - [ ] Support `--words-per-line`.
-    - [ ] Improve the algorithm to penalize short and long lines
+    - [ ] Support `optimize.preferred_(min|max)_words_per_line`.
+    - [x] Improve the algorithm to penalize short and long lines
           with a more sophisticated method.
   - [ ] Improve indent level prediction.
   - [ ] Performance and accuracy benchmarking,

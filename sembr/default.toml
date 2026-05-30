@@ -27,8 +27,8 @@ line_length_penalty_weight = 0.05
 # Number of spaces represented by one indentation level.
 # Set to "auto" to detect 2-, 4-, or 8-space indents from input.
 num_spaces = "auto"
-# Indentation unit to emit; valid values are "space" or "tab".
-indent_type = "space"
+# Indentation unit to emit; valid values are "space", "tab", or "auto".
+indent_type = "auto"
 
 [server]
 # API server IP address checked by clients.

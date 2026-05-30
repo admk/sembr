@@ -141,6 +141,15 @@ def test_load_config_accepts_auto_num_spaces(tmp_path):
     assert config['spaces'] == 'auto'
 
 
+def test_load_config_accepts_auto_indent_type(tmp_path):
+    path = tmp_path / 'config.toml'
+    path.write_text('[format]\nindent_type = "auto"', encoding='utf-8')
+
+    config = load_config(path=path)
+
+    assert config['indent_type'] == 'auto'
+
+
 def test_load_config_rejects_unknown_key(tmp_path):
     path = tmp_path / 'config.toml'
     path.write_text('[model]\nunknown = "value"', encoding='utf-8')

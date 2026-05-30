@@ -48,7 +48,7 @@ PREDICT_FUNCS = (
     'balanced_linebreaks',
 )
 
-INDENT_TYPES = ('space', 'tab')
+INDENT_TYPES = ('space', 'tab', 'auto')
 
 
 def config_path():
