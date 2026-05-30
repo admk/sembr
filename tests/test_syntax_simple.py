@@ -79,7 +79,7 @@ def mock_process_minimal(processor, text: str) -> str:
     return processor.generate(mock_tokenized)
 
 
-def test_markdown_file(processor, parser, filepath: Path) -> tuple[bool, str]:
+def _check_markdown_file(processor, parser, filepath: Path) -> tuple[bool, str]:
     """Test a single markdown file."""
     with open(filepath, 'r') as f:
         original = f.read()
@@ -101,6 +101,22 @@ def test_markdown_file(processor, parser, filepath: Path) -> tuple[bool, str]:
             
     except Exception as e:
         return False, f"✗ {filepath.name}: Exception - {str(e)}"
+
+
+def test_markdown_fixtures_preserve_tree_structure():
+    """Run tree-structure preservation checks on all markdown fixtures."""
+    fixtures_dir = Path(__file__).parent / 'fixtures'
+    processor = MarkdownProcessor()
+    language = Language(tsmarkdown.language())
+    parser = Parser(language)
+
+    failures = []
+    for test_file in sorted(fixtures_dir.glob('*.md')):
+        success, message = _check_markdown_file(processor, parser, test_file)
+        if not success:
+            failures.append(message)
+
+    assert not failures, '\n'.join(failures)
 
 
 def main():
@@ -127,7 +143,7 @@ def main():
     failed = 0
     
     for test_file in sorted(test_files):
-        success, message = test_markdown_file(processor, parser, test_file)
+        success, message = _check_markdown_file(processor, parser, test_file)
         print(message)
         
         if success:
@@ -142,7 +158,7 @@ def main():
         print("\nRunning detailed analysis for failures...")
         # Run actual SemBr processing for failed cases to see output
         for test_file in sorted(test_files):
-            success, message = test_markdown_file(processor, parser, test_file)
+            success, message = _check_markdown_file(processor, parser, test_file)
             if not success:
                 print(f"\nAnalyzing {test_file.name}:")
                 with open(test_file, 'r') as f:

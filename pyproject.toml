@@ -72,10 +72,6 @@ version = {attr = "sembr.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = [
-    "--ignore=tests/test_actual_sembr.py",
-    "--ignore=tests/test_syntax_simple.py",
-]
 
 [tool.uv]
 environments = [
