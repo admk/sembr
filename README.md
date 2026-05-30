@@ -175,6 +175,13 @@ The supported config keys are:
 * `optimize.line_length_penalty_weight`:
   Penalty weight for line lengths outside the preferred range.
   The default is `0.05`.
+* `format.num_spaces`:
+  Number of spaces represented by one indentation level.
+  The default is `4`.
+* `format.indent_type`:
+  Indentation unit to emit.
+  Options are `space` and `tab`.
+  The default is `space`.
 * `server.ip`:
   The IP address of the SemBr API server.
   The default is `127.0.0.1`.

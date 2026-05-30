@@ -30,6 +30,10 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
             'algorithm = "greedy_linebreaks"',
             'preferred_max_tokens_per_line = 12',
             '',
+            '[format]',
+            'num_spaces = 2',
+            'indent_type = "tab"',
+            '',
             '[server]',
             'ip = "0.0.0.0"',
             'port = 9000',
@@ -37,7 +41,12 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
         encoding='utf-8')
 
     config = load_config(
-        ['inference.batch-size=16', 'optimize.preferred_max_tokens_per_line=null', 'model.bits=4'],
+        [
+            'inference.batch-size=16',
+            'optimize.preferred_max_tokens_per_line=null',
+            'model.bits=4',
+            'format.num_spaces=8',
+        ],
         path=path)
 
     assert config == {
@@ -47,6 +56,8 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
         'overlap_divisor': 2,
         'predict_func': 'greedy_linebreaks',
         'preferred_max_tokens_per_line': None,
+        'spaces': 8,
+        'indent_type': 'tab',
         'server': '0.0.0.0',
         'port': 9000,
         'bits': 4,
@@ -106,6 +117,19 @@ def test_load_config_rejects_invalid_line_length_bounds(tmp_path):
         assert 'optimize.preferred_min_tokens_per_line' in str(e)
     else:
         raise AssertionError('load_config accepted invalid line length bounds')
+
+
+def test_load_config_rejects_invalid_indent_type(tmp_path):
+    path = tmp_path / 'config.toml'
+    path.write_text('[format]\nindent_type = "tabs"', encoding='utf-8')
+
+    try:
+        load_config(path=path)
+    except ValueError as e:
+        assert 'format.indent_type' in str(e)
+        assert 'space, tab' in str(e)
+    else:
+        raise AssertionError('load_config accepted an invalid indent type')
 
 
 def test_load_config_rejects_unknown_key(tmp_path):

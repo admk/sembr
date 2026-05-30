@@ -24,8 +24,8 @@ class MarkdownProcessor(BaseProcessor):
     only to the text.
     """
 
-    def __init__(self, spaces: int = 4):
-        super().__init__(spaces)
+    def __init__(self, spaces: int = 4, indent_type: str = "space"):
+        super().__init__(spaces, indent_type)
 
         # Initialize tree-sitter parser
         self.language = Language(tsmarkdown.language())
@@ -127,7 +127,7 @@ class MarkdownProcessor(BaseProcessor):
 
     def parse_text(self, text: str, split: bool = True) -> List[Dict[str, Any]]:
         """Parse text to find inline content regions."""
-        text = text.replace("\t", " " * self.spaces)
+        text = self._normalize_tabs(text)
         self._original_text = text
         text_regions = self._identify_content_regions(text)
         # Process each text region

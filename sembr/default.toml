@@ -23,6 +23,12 @@ algorithm = "argmax"
 # Penalty weight for line lengths outside the preferred range.
 line_length_penalty_weight = 0.05
 
+[format]
+# Number of spaces represented by one indentation level.
+num_spaces = 4
+# Indentation unit to emit; valid values are "space" or "tab".
+indent_type = "space"
+
 [server]
 # API server IP address checked by clients.
 ip = "127.0.0.1"

@@ -201,7 +201,7 @@ class LaTeXProcessor(BaseProcessor):
         Returns:
             List of parsed paragraphs
         """
-        text = text.replace("\t", " " * self.spaces)
+        text = self._normalize_tabs(text)
         if split:
             text = re.split(r"\n(?:\s*\n)+", text)
         elif isinstance(text, str):

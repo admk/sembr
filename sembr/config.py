@@ -12,6 +12,8 @@ CONFIG_KEY_MAP = {
     'optimize.preferred_min_tokens_per_line': 'preferred_min_tokens_per_line',
     'optimize.preferred_max_tokens_per_line': 'preferred_max_tokens_per_line',
     'optimize.line_length_penalty_weight': 'line_length_penalty_weight',
+    'format.num_spaces': 'spaces',
+    'format.indent_type': 'indent_type',
     'server.ip': 'server',
     'server.port': 'port',
 }
@@ -24,6 +26,8 @@ CONFIG_TYPES = {
     'preferred_min_tokens_per_line': int,
     'preferred_max_tokens_per_line': int,
     'line_length_penalty_weight': float,
+    'spaces': int,
+    'indent_type': str,
     'server': str,
     'port': int,
     'bits': int,
@@ -43,6 +47,8 @@ PREDICT_FUNCS = (
     'greedy_linebreaks',
     'balanced_linebreaks',
 )
+
+INDENT_TYPES = ('space', 'tab')
 
 
 def config_path():
@@ -122,9 +128,14 @@ def _parse_config_value(key, value):
             f'Config key {key!r} must be one of: {valid}.')
     if attr == 'bits' and value not in [4, 8]:
         raise ValueError(f"Config key {key!r} must be one of: 4, 8.")
+    if attr == 'indent_type' and value not in INDENT_TYPES:
+        valid = ', '.join(INDENT_TYPES)
+        raise ValueError(
+            f'Config key {key!r} must be one of: {valid}.')
     if attr in [
         'preferred_min_tokens_per_line',
         'preferred_max_tokens_per_line',
+        'spaces',
     ] and value < 1:
         raise ValueError(
             f'Config key {key!r} must be positive.')

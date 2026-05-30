@@ -54,7 +54,10 @@ def cli_parser():
     return p
 
 
-def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text=None, verbose=False):
+def init(
+    model_name, bits=None, dtype=None, file_type=None, file_path=None,
+    text=None, verbose=False, spaces=4, indent_type='space'
+):
     import torch
     from transformers import AutoTokenizer, AutoModelForTokenClassification
     from .processors import get_processor
@@ -96,12 +99,14 @@ def init(model_name, bits=None, dtype=None, file_type=None, file_path=None, text
         model = model.to(device)
     model.eval()
     processor = get_processor(
-        file_type=file_type, file_path=file_path, text=text, verbose=verbose)
+        file_type=file_type, file_path=file_path, text=text, verbose=verbose,
+        spaces=spaces, indent_type=indent_type)
     return tokenizer, model, processor
 
 
 def start_server(
-    port, tokenizer, model, default_file_type=None, wrap_kwargs=None
+    port, tokenizer, model, default_file_type=None, wrap_kwargs=None,
+    processor_kwargs=None
 ):
     from flask import Flask, request
     from .processors import get_processor
@@ -124,17 +129,20 @@ def start_server(
         form = request.form
         text = form['text']
         kwargs = dict(wrap_kwargs or {})
+        proc_kwargs = dict(processor_kwargs or {})
 
         # Get file_type from form data or use default
         file_type = form.get('file_type', default_file_type)
 
-        # Create processor dynamically based on file type or text content
-        processor = get_processor(
-            file_type=file_type, text=text if not file_type else None)
-
         # Process other form parameters
         for k, v in form.items():
             if k in ['text', 'file_type']:
+                continue
+            if k == 'spaces':
+                proc_kwargs[k] = int(v)
+                continue
+            if k == 'indent_type':
+                proc_kwargs[k] = v
                 continue
             if k in [
                 'batch_size',
@@ -146,6 +154,10 @@ def start_server(
             if k in ['line_length_penalty_weight']:
                 v = float(v)
             kwargs[k] = v
+        # Create processor dynamically based on file type or text content
+        processor = get_processor(
+            file_type=file_type, text=text if not file_type else None,
+            **proc_kwargs)
         try:
             results = sembr(text, tokenizer, model, processor, **kwargs)
             return {
@@ -153,6 +165,7 @@ def start_server(
                 **base_rv,
                 'processor': processor.__class__.__name__,
                 'file_type': file_type,
+                **proc_kwargs,
                 **kwargs,
                 'text': results,
             }
@@ -162,6 +175,7 @@ def start_server(
                 **base_rv,
                 'processor': processor.__class__.__name__,
                 'file_type': file_type,
+                **proc_kwargs,
                 **kwargs,
                 'error': str(e),
                 'traceback': traceback.format_exc(),
@@ -200,8 +214,8 @@ def check_server(server, port):
     return True
 
 
-def rewrap_on_server(text, server, port, kwargs):
-    data = {'text': text, **kwargs}
+def rewrap_on_server(text, server, port, kwargs, processor_kwargs=None):
+    data = {'text': text, **(processor_kwargs or {}), **kwargs}
     response = _fetch(server, port, 'rewrap', 'post', data)
     return response['text']
 
@@ -214,6 +228,13 @@ def wrap_kwargs(args):
         'preferred_max_tokens_per_line': args.preferred_max_tokens_per_line,
         'line_length_penalty_weight': args.line_length_penalty_weight,
         'overlap_divisor': args.overlap_divisor,
+    }
+
+
+def processor_kwargs(args):
+    return {
+        'spaces': args.spaces,
+        'indent_type': args.indent_type,
     }
 
 
@@ -250,10 +271,13 @@ def main() -> int:
         mcp.run()
         return 0
     kwargs = wrap_kwargs(args)
+    proc_kwargs = processor_kwargs(args)
     if args.listen:
         tokenizer, model, _ = init(
-            args.model_name, args.bits, args.dtype, args.file_type, None, None, args.verbose)
-        start_server(args.port, tokenizer, model, args.file_type, kwargs)
+            args.model_name, args.bits, args.dtype, args.file_type, None, None,
+            args.verbose, **proc_kwargs)
+        start_server(
+            args.port, tokenizer, model, args.file_type, kwargs, proc_kwargs)
         return 0
     if args.input_file is not None:
         with open(args.input_file, 'r', encoding='utf-8') as f:
@@ -265,12 +289,13 @@ def main() -> int:
         print('\nNo input file or stdin text provided.', file=sys.stderr)
         return 1
     if check_server(args.server, args.port):
-        result = rewrap_on_server(text, args.server, args.port, kwargs)
+        result = rewrap_on_server(
+            text, args.server, args.port, kwargs, proc_kwargs)
     else:
         from .inference import sembr
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype,
-            args.file_type, args.input_file, text, args.verbose)
+            args.file_type, args.input_file, text, args.verbose, **proc_kwargs)
         result = sembr(text, tokenizer, model, processor, **kwargs)
     if args.output_file is None:
         print(result)

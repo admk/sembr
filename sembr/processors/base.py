@@ -14,14 +14,20 @@ class BaseProcessor(ABC):
     for a specific file type using appropriate grammars.
     """
 
-    def __init__(self, spaces: int = 4):
+    def __init__(self, spaces: int = 4, indent_type: str = "space"):
         """
         Initialize processor.
 
         Args:
             spaces: Number of spaces per indent level
+            indent_type: Indentation unit to emit, either "space" or "tab"
         """
+        if spaces < 1:
+            raise ValueError("spaces must be positive.")
+        if indent_type not in ["space", "tab"]:
+            raise ValueError('indent_type must be "space" or "tab".')
         self.spaces = spaces
+        self.indent_type = indent_type
         self.replace_tokens = self._get_replace_tokens()
         self.reverse_replace_tokens = {
             v: k for k, v in self.replace_tokens.items()
@@ -73,6 +79,40 @@ class BaseProcessor(ABC):
             lines = [l.replace(k, v) for l in lines]
         return lines
 
+    def _indent_unit(self) -> str:
+        if self.indent_type == "tab":
+            return "\t"
+        return " " * self.spaces
+
+    def _normalize_tabs(self, text: str) -> str:
+        if self.indent_type == "tab":
+            return text
+        return text.replace("\t", " " * self.spaces)
+
+    def _split_indent(self, line: str) -> tuple[int, str]:
+        columns = 0
+        prefix_end = 0
+        for c in line:
+            if c == " ":
+                columns += 1
+            elif c == "\t":
+                columns += self.spaces
+            else:
+                break
+            prefix_end += 1
+
+        indent_level = int(columns / self.spaces)
+        columns_to_remove = indent_level * self.spaces
+        removed_columns = 0
+        content_start = 0
+        for c in line[:prefix_end]:
+            width = self.spaces if c == "\t" else 1
+            if removed_columns + width > columns_to_remove:
+                break
+            removed_columns += width
+            content_start += 1
+        return indent_level, line[content_start:].rstrip()
+
     def _process_indents(self, lines: List[str]) -> tuple[List[str], List[int]]:
         """
         Extract indent levels from lines.
@@ -86,16 +126,8 @@ class BaseProcessor(ABC):
         nlines = []
         indents = []
         for line in lines:
-            indent = 0
-            for c in line:
-                if c == " ":
-                    indent += 1
-                elif c == "\t":
-                    raise ValueError("Tabs are not allowed.")
-                else:
-                    break
-            indent_level = int(indent / self.spaces)
-            nlines.append(line[indent_level * self.spaces :].rstrip())
+            indent_level, line = self._split_indent(line)
+            nlines.append(line)
             indents.append(indent_level)
         return nlines, indents
 
@@ -230,8 +262,8 @@ class BaseProcessor(ABC):
         Returns:
             List of indented lines
         """
-        spaces = " " * self.spaces
-        return [f"{spaces * (i + base_indent)}{l}" for i, l in zip(indents, lines)]
+        indent = self._indent_unit()
+        return [f"{indent * (i + base_indent)}{l}" for i, l in zip(indents, lines)]
 
     def _generate_lines(
         self, words: List[str], modes: List[str], indents: List[int]
