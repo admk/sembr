@@ -3,6 +3,7 @@ Base processor class for grammar-based text processing.
 """
 
 from abc import ABC, abstractmethod
+from math import gcd
 from typing import List, Dict, Any
 
 
@@ -14,7 +15,7 @@ class BaseProcessor(ABC):
     for a specific file type using appropriate grammars.
     """
 
-    def __init__(self, spaces: int = 4, indent_type: str = "space"):
+    def __init__(self, spaces: int | str = 4, indent_type: str = "space"):
         """
         Initialize processor.
 
@@ -22,12 +23,16 @@ class BaseProcessor(ABC):
             spaces: Number of spaces per indent level
             indent_type: Indentation unit to emit, either "space" or "tab"
         """
-        if spaces < 1:
+        if isinstance(spaces, str):
+            if spaces != "auto":
+                raise ValueError('spaces must be positive or "auto".')
+        elif spaces < 1:
             raise ValueError("spaces must be positive.")
         if indent_type not in ["space", "tab"]:
             raise ValueError('indent_type must be "space" or "tab".')
         self.spaces = spaces
         self.indent_type = indent_type
+        self._active_spaces = None
         self.replace_tokens = self._get_replace_tokens()
         self.reverse_replace_tokens = {
             v: k for k, v in self.replace_tokens.items()
@@ -79,15 +84,57 @@ class BaseProcessor(ABC):
             lines = [l.replace(k, v) for l in lines]
         return lines
 
+    def _detect_spaces(self, text: str) -> int:
+        counts = []
+        for line in text.splitlines():
+            count = 0
+            for c in line:
+                if c == " ":
+                    count += 1
+                elif c == "\t":
+                    count = 0
+                    break
+                else:
+                    break
+            if count:
+                counts.append(count)
+        if not counts:
+            return 4
+        detected = counts[0]
+        for count in counts[1:]:
+            detected = gcd(detected, count)
+        for candidate in (8, 4, 2):
+            if detected >= candidate and detected % candidate == 0:
+                return candidate
+        return 4
+
+    def _resolve_spaces(self, text: str | None = None) -> int:
+        if isinstance(self.spaces, int):
+            return self.spaces
+        if text is None:
+            return 4
+        return self._detect_spaces(text)
+
+    def _prepare_text(self, text: str) -> str:
+        self._active_spaces = self._resolve_spaces(text)
+        return self._normalize_tabs(text)
+
+    def _spaces(self) -> int:
+        if self._active_spaces is not None:
+            return self._active_spaces
+        if isinstance(self.spaces, int):
+            return self.spaces
+        return 4
+
     def _indent_unit(self) -> str:
         if self.indent_type == "tab":
             return "\t"
-        return " " * self.spaces
+        return " " * self._spaces()
 
     def _normalize_tabs(self, text: str) -> str:
         if self.indent_type == "tab":
             return text
-        return text.replace("\t", " " * self.spaces)
+        return text.replace("\t", " " * self._spaces())
 
     def _split_indent(self, line: str) -> tuple[int, str]:
         columns = 0
@@ -96,17 +143,18 @@ class BaseProcessor(ABC):
             if c == " ":
                 columns += 1
             elif c == "\t":
-                columns += self.spaces
+                columns += self._spaces()
             else:
                 break
             prefix_end += 1
 
-        indent_level = int(columns / self.spaces)
-        columns_to_remove = indent_level * self.spaces
+        spaces = self._spaces()
+        indent_level = int(columns / spaces)
+        columns_to_remove = indent_level * spaces
         removed_columns = 0
         content_start = 0
         for c in line[:prefix_end]:
-            width = self.spaces if c == "\t" else 1
+            width = spaces if c == "\t" else 1
             if removed_columns + width > columns_to_remove:
                 break
             removed_columns += width

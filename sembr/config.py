@@ -105,6 +105,8 @@ def _parse_config_value(key, value):
         if attr in CONFIG_NULLABLE:
             return None
         raise ValueError(f'Config key {key!r} cannot be null.')
+    if attr == 'spaces' and isinstance(value, str) and value.lower() == 'auto':
+        return 'auto'
     expected_type = CONFIG_TYPES[attr]
     if expected_type in [int, float] and isinstance(value, bool):
         raise ValueError(
@@ -135,10 +137,12 @@ def _parse_config_value(key, value):
     if attr in [
         'preferred_min_tokens_per_line',
         'preferred_max_tokens_per_line',
-        'spaces',
     ] and value < 1:
         raise ValueError(
             f'Config key {key!r} must be positive.')
+    if attr == 'spaces' and isinstance(value, int) and value < 1:
+        raise ValueError(
+            f'Config key {key!r} must be positive or "auto".')
     if attr == 'line_length_penalty_weight' and value < 0:
         raise ValueError(
             f'Config key {key!r} must be non-negative.')

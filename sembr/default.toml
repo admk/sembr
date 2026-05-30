@@ -25,7 +25,8 @@ line_length_penalty_weight = 0.05
 
 [format]
 # Number of spaces represented by one indentation level.
-num_spaces = 4
+# Set to "auto" to detect 2-, 4-, or 8-space indents from input.
+num_spaces = "auto"
 # Indentation unit to emit; valid values are "space" or "tab".
 indent_type = "space"
 

@@ -127,7 +127,7 @@ class MarkdownProcessor(BaseProcessor):
 
     def parse_text(self, text: str, split: bool = True) -> List[Dict[str, Any]]:
         """Parse text to find inline content regions."""
-        text = self._normalize_tabs(text)
+        text = self._prepare_text(text)
         self._original_text = text
         text_regions = self._identify_content_regions(text)
         # Process each text region
