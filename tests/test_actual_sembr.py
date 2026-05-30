@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from pathlib import Path
 import subprocess
 import socket
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -45,6 +46,8 @@ def _start_actual_sembr_listener():
     port = _find_free_port()
     env = os.environ.copy()
     env['XDG_CONFIG_HOME'] = str(REPO_ROOT / '.pytest-xdg')
+    log = tempfile.NamedTemporaryFile(
+        mode='w+', prefix='sembr-listen-', suffix='.log', delete=False)
     proc = subprocess.Popen(
         [
             'uv', 'run', 'sembr', '--listen',
@@ -53,10 +56,11 @@ def _start_actual_sembr_listener():
         cwd=REPO_ROOT,
         env=env,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=log,
     )
     _wait_for_server(port)
-    return proc, port, env
+    log.close()
+    return proc, port, env, Path(log.name)
 
 
 def _stop_actual_sembr_listener(proc):
@@ -70,9 +74,9 @@ def _stop_actual_sembr_listener(proc):
 
 @pytest.fixture(scope='session')
 def actual_sembr_runtime():
-    proc, port, env = _start_actual_sembr_listener()
+    proc, port, env, log_path = _start_actual_sembr_listener()
     try:
-        yield port, env
+        yield port, env, log_path
     finally:
         _stop_actual_sembr_listener(proc)
 
@@ -141,8 +145,10 @@ def _check_with_actual_sembr(test_file: Path, port: int, env: dict) -> tuple[boo
 )
 def test_actual_sembr_fixture(test_file, actual_sembr_runtime):
     """Run actual SemBr CLI processing on a markdown fixture."""
-    port, env = actual_sembr_runtime
+    port, env, log_path = actual_sembr_runtime
     success, message = _check_with_actual_sembr(test_file, port, env)
+    if not success and log_path.exists():
+        message = f'{message}\n\nServer log:\n{log_path.read_text()}'
 
     assert success, message
 
@@ -152,7 +158,7 @@ def main():
     print("Running Actual SemBr Processing Tests")
     print("=" * 45)
 
-    proc, port, env = _start_actual_sembr_listener()
+    proc, port, env, _ = _start_actual_sembr_listener()
     passed = 0
     failed = 0
 
