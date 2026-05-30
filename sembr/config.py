@@ -1,61 +1,61 @@
 import os
 from pathlib import Path
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import field_validator, model_validator
 
 
-CONFIG_KEY_MAP = {
-    'model.name': 'model_name',
-    'model.bits': 'bits',
-    'model.dtype': 'dtype',
-    'inference.batch_size': 'batch_size',
-    'inference.overlap_divisor': 'overlap_divisor',
-    'optimize.algorithm': 'predict_func',
-    'optimize.preferred_min_tokens_per_line': 'preferred_min_tokens_per_line',
-    'optimize.preferred_max_tokens_per_line': 'preferred_max_tokens_per_line',
-    'optimize.line_length_penalty_weight': 'line_length_penalty_weight',
-    'format.num_spaces': 'spaces',
-    'format.indent_type': 'indent_type',
-    'server.ip': 'server',
-    'server.port': 'port',
-}
+class SembrConfig(BaseModel):
+    model_name: str = Field(alias='model.name')
+    bits: int | None = Field(default=None, alias='model.bits')
+    dtype: str | None = Field(default=None, alias='model.dtype')
+    batch_size: PositiveInt = Field(alias='inference.batch_size')
+    overlap_divisor: PositiveInt = Field(alias='inference.overlap_divisor')
+    predict_func: Literal[
+        'argmax',
+        'logit_adjustment',
+        'greedy_linebreaks',
+        'balanced_linebreaks',
+    ] = Field(alias='optimize.algorithm')
+    preferred_min_tokens_per_line: PositiveInt | None = Field(
+        default=None, alias='optimize.preferred_min_tokens_per_line')
+    preferred_max_tokens_per_line: PositiveInt | None = Field(
+        default=None, alias='optimize.preferred_max_tokens_per_line')
+    line_length_penalty_weight: float = Field(
+        ge=0, alias='optimize.line_length_penalty_weight')
+    spaces: PositiveInt | Literal['auto'] = Field(
+        alias='format.num_spaces')
+    indent_type: Literal['space', 'tab', 'auto'] = Field(
+        alias='format.indent_type')
+    server: str = Field(alias='server.ip')
+    port: PositiveInt = Field(alias='server.port')
 
-CONFIG_TYPES = {
-    'model_name': str,
-    'batch_size': int,
-    'overlap_divisor': int,
-    'predict_func': str,
-    'preferred_min_tokens_per_line': int,
-    'preferred_max_tokens_per_line': int,
-    'line_length_penalty_weight': float,
-    'spaces': int,
-    'indent_type': str,
-    'server': str,
-    'port': int,
-    'bits': int,
-    'dtype': str,
-}
+    model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
-CONFIG_NULLABLE = {
-    'preferred_min_tokens_per_line',
-    'preferred_max_tokens_per_line',
-    'bits',
-    'dtype',
-}
+    @field_validator('bits')
+    @classmethod
+    def _validate_bits(cls, value):
+        if value is not None and value not in [4, 8]:
+            raise ValueError('must be one of: 4, 8.')
+        return value
 
-PREDICT_FUNCS = (
-    'argmax',
-    'logit_adjustment',
-    'greedy_linebreaks',
-    'balanced_linebreaks',
-)
-
-INDENT_TYPES = ('space', 'tab', 'auto')
+    @model_validator(mode='after')
+    def _validate_line_length_bounds(self):
+        minimum = self.preferred_min_tokens_per_line
+        maximum = self.preferred_max_tokens_per_line
+        if minimum is not None and maximum is not None and minimum > maximum:
+            raise ValueError(
+                'Config key "optimize.preferred_min_tokens_per_line" '
+                'must be less than or equal to '
+                '"optimize.preferred_max_tokens_per_line".')
+        return self
 
 
 def config_path():
-    config_home = os.environ.get('XDG_CONFIG_HOME')
-    if config_home is None:
-        config_home = os.path.join(Path.home(), '.config')
-    return Path(config_home) / 'sembr' / 'config.toml'
+    return Path(
+        os.environ.get('XDG_CONFIG_HOME', Path.home() / '.config')
+    ) / 'sembr' / 'config.toml'
 
 
 def default_config_path():
@@ -71,95 +71,18 @@ def _load_toml(path):
         return tomllib.load(f)
 
 
-def _config_key_to_attr(key):
-    key = key.strip().replace('-', '_')
-    if key not in CONFIG_KEY_MAP:
-        valid = ', '.join(sorted(CONFIG_KEY_MAP))
-        raise ValueError(f'Unknown config key {key!r}. Valid keys: {valid}.')
-    return CONFIG_KEY_MAP[key]
-
-
 def _flatten_config_table(loaded):
-    valid_sections = sorted({key.split('.', 1)[0] for key in CONFIG_KEY_MAP})
     config = {}
     if not isinstance(loaded, dict):
         raise ValueError('Config file must contain a TOML table.')
     for section, values in loaded.items():
         section = section.replace('-', '_')
-        if section not in valid_sections:
-            valid = ', '.join(valid_sections)
-            raise ValueError(
-                f'Unknown config section [{section}]. Valid sections: {valid}.')
         if not isinstance(values, dict):
             raise ValueError(f'Config section [{section}] must be a TOML table.')
         for key, value in values.items():
             config_key = f'{section}.{key}'.replace('-', '_')
-            attr = _config_key_to_attr(config_key)
-            config[attr] = _parse_config_value(config_key, value)
+            config[config_key] = value
     return config
-
-
-def _parse_config_value(key, value):
-    attr = _config_key_to_attr(key)
-    if value is None:
-        if attr in CONFIG_NULLABLE:
-            return None
-        raise ValueError(f'Config key {key!r} cannot be null.')
-    if attr == 'spaces' and isinstance(value, str) and value.lower() == 'auto':
-        return 'auto'
-    expected_type = CONFIG_TYPES[attr]
-    if expected_type in [int, float] and isinstance(value, bool):
-        raise ValueError(
-            f'Config key {key!r} must be {expected_type.__name__}.')
-    if isinstance(value, str) and expected_type is not str:
-        if value.lower() in ['none', 'null']:
-            return _parse_config_value(key, None)
-        try:
-            value = expected_type(value)
-        except ValueError:
-            raise ValueError(
-                f'Config key {key!r} must be {expected_type.__name__}.')
-    if expected_type is float and isinstance(value, int):
-        value = float(value)
-    if not isinstance(value, expected_type):
-        raise ValueError(
-            f'Config key {key!r} must be {expected_type.__name__}.')
-    if attr == 'predict_func' and value not in PREDICT_FUNCS:
-        valid = ', '.join(PREDICT_FUNCS)
-        raise ValueError(
-            f'Config key {key!r} must be one of: {valid}.')
-    if attr == 'bits' and value not in [4, 8]:
-        raise ValueError(f"Config key {key!r} must be one of: 4, 8.")
-    if attr == 'indent_type' and value not in INDENT_TYPES:
-        valid = ', '.join(INDENT_TYPES)
-        raise ValueError(
-            f'Config key {key!r} must be one of: {valid}.')
-    if attr in [
-        'preferred_min_tokens_per_line',
-        'preferred_max_tokens_per_line',
-    ] and value < 1:
-        raise ValueError(
-            f'Config key {key!r} must be positive.')
-    if attr == 'spaces' and isinstance(value, int) and value < 1:
-        raise ValueError(
-            f'Config key {key!r} must be positive or "auto".')
-    if attr == 'line_length_penalty_weight' and value < 0:
-        raise ValueError(
-            f'Config key {key!r} must be non-negative.')
-    return value
-
-
-def _load_default_config():
-    config = {key: None for key in CONFIG_NULLABLE}
-    config.update(_flatten_config_table(_load_toml(default_config_path())))
-    missing = sorted(set(CONFIG_TYPES) - set(config))
-    if missing:
-        raise RuntimeError(
-            f'Default config is missing required keys: {", ".join(missing)}.')
-    return config
-
-
-CONFIG_DEFAULTS = _load_default_config()
 
 
 def _parse_config_override(override):
@@ -167,34 +90,43 @@ def _parse_config_override(override):
         raise ValueError(
             f'Config override {override!r} must use KEY=VALUE syntax.')
     key, value = override.split('=', 1)
-    key = key.strip().replace('-', '_')
-    return _config_key_to_attr(key), _parse_config_value(key, value.strip())
+    value = value.strip()
+    if value.lower() in ['none', 'null']:
+        value = None
+    return key.strip().replace('-', '_'), value
 
 
-def load_config(overrides=None, path=None):
-    config = dict(CONFIG_DEFAULTS)
-    path = Path(path) if path is not None else config_path()
-    if path.exists():
-        config.update(_flatten_config_table(_load_toml(path)))
+CONFIG_FILE_DEFAULTS = _flatten_config_table(_load_toml(default_config_path()))
+CONFIG_DEFAULTS = SembrConfig.model_validate(CONFIG_FILE_DEFAULTS).model_dump()
+
+
+def _config_data_from_attrs(config):
+    return {
+        field.alias: config[attr]
+        for attr, field in SembrConfig.model_fields.items()
+        if attr in config
+    }
+
+
+def load_config(
+    overrides=None, path=None, read_config_file=True, base_config=None
+):
+    data = dict(CONFIG_FILE_DEFAULTS)
+    if read_config_file:
+        path = Path(path) if path is not None else config_path()
+        if path.exists():
+            data.update(_flatten_config_table(_load_toml(path)))
+    data.update(_config_data_from_attrs(base_config or {}))
     for override in overrides or []:
-        attr, value = _parse_config_override(override)
-        config[attr] = value
-    _validate_config(config)
-    return config
+        key, value = _parse_config_override(override)
+        data[key] = value
+    return SembrConfig.model_validate(data).model_dump()
 
 
-def _validate_config(config):
-    minimum = config.get('preferred_min_tokens_per_line')
-    maximum = config.get('preferred_max_tokens_per_line')
-    if minimum is not None and maximum is not None and minimum > maximum:
-        raise ValueError(
-            'Config key "optimize.preferred_min_tokens_per_line" '
-            'must be less than or equal to '
-            '"optimize.preferred_max_tokens_per_line".')
-
-
-def apply_config(args, overrides=None, path=None):
-    config = load_config(overrides, path)
+def apply_config(
+    args, overrides=None, path=None, read_config_file=True, base_config=None
+):
+    config = load_config(overrides, path, read_config_file, base_config)
     for key, value in config.items():
         setattr(args, key, value)
     return args

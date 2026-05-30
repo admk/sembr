@@ -371,6 +371,7 @@ def sembr(
     *,
     preferred_min_tokens_per_line=None, preferred_max_tokens_per_line=None,
     line_length_penalty_weight=DEFAULT_LINE_LENGTH_PENALTY_WEIGHT,
+    **_,
 ):
     results = inference(
         text, tokenizer, model, processor, predict_func,

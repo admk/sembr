@@ -5,35 +5,25 @@ from mcp.types import TextContent
 from fastmcp import FastMCP
 from fastmcp.tools.tool import ToolResult
 
-from .cli import init, cli_parser, processor_kwargs, wrap_kwargs
+from .cli import init, cli_parser, rewrap_text
 from .config import apply_config
 
 
 class SembrModel:
-    def __init__(
-        self, tokenizer, model, default_file_type=None, kwargs=None,
-        processor_kwargs=None
-    ):
+    def __init__(self, tokenizer, model, default_file_type=None, config=None):
         self.tokenizer = tokenizer
         self.model = model
         self.default_file_type = default_file_type
-        self.kwargs = kwargs or {}
-        self.processor_kwargs = processor_kwargs or {}
+        self.config = config or {}
 
     def process_text(self, text: str, file_type: Optional[str] = None) -> str:
-        from .inference import sembr
-        from .processors import get_processor
-
-        # Use provided file_type, default, or auto-detect from text
-        effective_file_type = file_type or self.default_file_type
-        processor = get_processor(
-            file_type=effective_file_type,
-            text=text if not effective_file_type else None,
-            **self.processor_kwargs
-        )
-
-        return sembr(
-            text, self.tokenizer, self.model, processor, **self.kwargs)
+        _, wrapped = rewrap_text(
+            text,
+            self.tokenizer,
+            self.model,
+            self.config,
+            file_type=file_type or self.default_file_type)
+        return wrapped
 
 
 _sembr_model: Optional[SembrModel] = None
@@ -47,13 +37,11 @@ def get_sembr_model() -> SembrModel:
     parser = cli_parser()
     args, _ = parser.parse_known_args()
     apply_config(args, args.config)
-    proc_kwargs = processor_kwargs(args)
+    config = vars(args)
     tokenizer, model, _ = init(
         args.model_name, args.bits, args.dtype, args.file_type,
-        spaces=proc_kwargs['spaces'], indent_type=proc_kwargs['indent_type'])
-    kwargs = wrap_kwargs(args)
-    _sembr_model = SembrModel(
-        tokenizer, model, args.file_type, kwargs, proc_kwargs)
+        spaces=config['spaces'], indent_type=config['indent_type'])
+    _sembr_model = SembrModel(tokenizer, model, args.file_type, config)
     return _sembr_model
 
 

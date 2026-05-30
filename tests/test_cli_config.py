@@ -4,7 +4,11 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from sembr.cli import cli_parser
-from sembr.config import CONFIG_DEFAULTS, config_path, load_config
+from sembr.config import (
+    CONFIG_DEFAULTS,
+    config_path,
+    load_config,
+)
 
 
 def test_config_path_uses_xdg_config_home(monkeypatch, tmp_path):
@@ -127,7 +131,8 @@ def test_load_config_rejects_invalid_indent_type(tmp_path):
         load_config(path=path)
     except ValueError as e:
         assert 'format.indent_type' in str(e)
-        assert 'space, tab' in str(e)
+        assert 'space' in str(e)
+        assert 'tab' in str(e)
     else:
         raise AssertionError('load_config accepted an invalid indent type')
 
@@ -157,7 +162,8 @@ def test_load_config_rejects_unknown_key(tmp_path):
     try:
         load_config(path=path)
     except ValueError as e:
-        assert "Unknown config key 'model.unknown'" in str(e)
+        assert 'model.unknown' in str(e)
+        assert 'Extra inputs are not permitted' in str(e)
     else:
         raise AssertionError('load_config accepted an unknown key')
 

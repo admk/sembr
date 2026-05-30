@@ -2,7 +2,7 @@ import os
 import sys
 import traceback
 
-from .config import apply_config
+from .config import SembrConfig, apply_config, load_config
 
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
@@ -13,11 +13,6 @@ def _safe_isatty(stream):
         return os.isatty(stream.fileno())
     except (AttributeError, OSError):
         return False
-
-
-STDIN_TTY = _safe_isatty(sys.stdin)
-STDOUT_TTY = _safe_isatty(sys.stdout)
-STDERR_TTY = _safe_isatty(sys.stderr)
 
 
 def package_version():
@@ -54,6 +49,14 @@ def cli_parser():
     return p
 
 
+def _from_pretrained(model_class, model_name, **kwargs):
+    try:
+        return model_class.from_pretrained(model_name, **kwargs)
+    except Exception:
+        return model_class.from_pretrained(
+            model_name, local_files_only=True, **kwargs)
+
+
 def init(
     model_name, bits=None, dtype=None, file_type=None, file_path=None,
     text=None, verbose=False, spaces=4, indent_type='space'
@@ -62,25 +65,21 @@ def init(
     from transformers import AutoTokenizer, AutoModelForTokenClassification
     from .processors import get_processor
 
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-    except Exception:
-        tokenizer = AutoTokenizer.from_pretrained(model_name, local_files_only=True)
-
+    tokenizer = _from_pretrained(AutoTokenizer, model_name)
     dtype = getattr(torch, dtype) if dtype is not None else torch.float32
-    kwargs = {}
+    model_kwargs = {}
     device = None
     if torch.cuda.is_available():
         if bits == 4:
             from transformers import BitsAndBytesConfig
-            kwargs['quantization_config'] = BitsAndBytesConfig(
+            model_kwargs['quantization_config'] = BitsAndBytesConfig(
                 load_in_4bit=True, bnb_4bit_compute_dtype=dtype)
-            kwargs['device_map'] = 'cuda'
+            model_kwargs['device_map'] = 'cuda'
         elif bits == 8:
             from transformers import BitsAndBytesConfig
-            kwargs['quantization_config'] = BitsAndBytesConfig(
+            model_kwargs['quantization_config'] = BitsAndBytesConfig(
                 load_in_8bit=True)
-            kwargs['device_map'] = 'cuda'
+            model_kwargs['device_map'] = 'cuda'
         else:
             device = 'cuda'
     elif torch.backends.mps.is_available():
@@ -88,28 +87,41 @@ def init(
             raise RuntimeError('MPS does not support quantization.')
         device = 'mps'
 
-    try:
-        model = AutoModelForTokenClassification.from_pretrained(
-            model_name, torch_dtype=dtype, **kwargs)
-    except Exception:
-        model = AutoModelForTokenClassification.from_pretrained(
-            model_name, torch_dtype=dtype, local_files_only=True, **kwargs)
-
+    model = _from_pretrained(
+        AutoModelForTokenClassification,
+        model_name,
+        torch_dtype=dtype,
+        **model_kwargs)
     if device is not None:
         model = model.to(device)
     model.eval()
     processor = get_processor(
-        file_type=file_type, file_path=file_path, text=text, verbose=verbose,
+        file_type, file_path, text, verbose,
         spaces=spaces, indent_type=indent_type)
     return tokenizer, model, processor
 
 
+def rewrap_text(
+    text, tokenizer, model, config, processor=None, file_type=None,
+    file_path=None, verbose=False,
+):
+    from .inference import sembr
+    from .processors import get_processor
+
+    if processor is None:
+        text = text if file_path is None and not file_type else None
+        processor = get_processor(
+            file_type, file_path, text, verbose, **config)
+    return (
+        processor,
+        sembr(text, tokenizer, model, processor, **config),
+    )
+
+
 def start_server(
-    port, tokenizer, model, default_file_type=None, wrap_kwargs=None,
-    processor_kwargs=None
+    port, tokenizer, model, default_file_type=None, default_config=None
 ):
     from flask import Flask, request
-    from .processors import get_processor
     app = Flask(__name__)
     base_rv = {
         'model': model.__class__.__name__,
@@ -118,70 +130,38 @@ def start_server(
 
     @app.route('/check')
     def check():
-        return {
-            'status': 'success',
-            **base_rv,
-        }
+        return {'status': 'success', **base_rv}
 
     @app.route('/rewrap', methods=['POST'])
     def rewrap():
-        from .inference import sembr
         form = request.form
-        text = form['text']
-        kwargs = dict(wrap_kwargs or {})
-        proc_kwargs = dict(processor_kwargs or {})
-
-        # Get file_type from form data or use default
         file_type = form.get('file_type', default_file_type)
-
-        # Process other form parameters
-        for k, v in form.items():
-            if k in ['text', 'file_type']:
-                continue
-            if k == 'spaces':
-                proc_kwargs[k] = v if v == 'auto' else int(v)
-                continue
-            if k == 'indent_type':
-                proc_kwargs[k] = v
-                continue
-            if k in [
-                'batch_size',
-                'overlap_divisor',
-                'preferred_min_tokens_per_line',
-                'preferred_max_tokens_per_line',
-            ]:
-                v = int(v)
-            if k in ['line_length_penalty_weight']:
-                v = float(v)
-            kwargs[k] = v
-        # Create processor dynamically based on file type or text content
-        processor = get_processor(
-            file_type=file_type, text=text if not file_type else None,
-            **proc_kwargs)
         try:
-            results = sembr(text, tokenizer, model, processor, **kwargs)
+            text = form['text']
+            config = load_config(
+                form.getlist('config'),
+                read_config_file=False,
+                base_config=default_config)
+            processor, results = rewrap_text(
+                text, tokenizer, model, config, file_type=file_type)
             return {
                 'status': 'success',
                 **base_rv,
                 'processor': processor.__class__.__name__,
                 'file_type': file_type,
-                **proc_kwargs,
-                **kwargs,
                 'text': results,
             }
         except Exception as e:
             return {
                 'status': 'error',
                 **base_rv,
-                'processor': processor.__class__.__name__,
-                'file_type': file_type,
-                **proc_kwargs,
-                **kwargs,
                 'error': str(e),
                 'traceback': traceback.format_exc(),
+                'file_type': file_type,
             }
 
     app.run(port=port)
+    return app
 
 
 def _fetch(server, port, endpoint, method='get', data=None, timeout=None):
@@ -214,28 +194,22 @@ def check_server(server, port):
     return True
 
 
-def rewrap_on_server(text, server, port, kwargs, processor_kwargs=None):
-    data = {'text': text, **(processor_kwargs or {}), **kwargs}
+def rewrap_on_server(
+    text, server, port, config, file_type=None
+):
+    data = [('text', text)]
+    if file_type is not None:
+        data.append(('file_type', file_type))
+    data.extend(
+        (
+            'config',
+            f'{field.alias}='
+            f'{"null" if config[attr] is None else config[attr]}',
+        )
+        for attr, field in SembrConfig.model_fields.items()
+        if attr in config)
     response = _fetch(server, port, 'rewrap', 'post', data)
     return response['text']
-
-
-def wrap_kwargs(args):
-    return {
-        'batch_size': args.batch_size,
-        'predict_func': args.predict_func,
-        'preferred_min_tokens_per_line': args.preferred_min_tokens_per_line,
-        'preferred_max_tokens_per_line': args.preferred_max_tokens_per_line,
-        'line_length_penalty_weight': args.line_length_penalty_weight,
-        'overlap_divisor': args.overlap_divisor,
-    }
-
-
-def processor_kwargs(args):
-    return {
-        'spaces': args.spaces,
-        'indent_type': args.indent_type,
-    }
 
 
 def print_args(args):
@@ -248,41 +222,33 @@ def main() -> int:
     parser = cli_parser()
     args = parser.parse_args()
     try:
-        apply_config(args, args.config)
+        config = vars(apply_config(args, args.config))
     except Exception as e:
         print(f'Config error: {e}', file=sys.stderr)
         return 2
     if args.verbose:
         print_args(args)
-    if args.debug:
-        import debugpy
-        debugpy.listen(5678)
-        print('Waiting for debugger to attach...')
-        debugpy.wait_for_client()
     if args.mcp:
         from .mcp import mcp
         unsupported = ['input_file', 'output_file', 'listen']
         for arg_name in unsupported:
             if getattr(args, arg_name) in [None, False]:
                 continue
-            message = f'--{arg_name} is not supported in MCP mode.'
-            print(message, file=sys.stderr)
+            print(
+                f'--{arg_name} is not supported in MCP mode.', file=sys.stderr)
             return 1
         mcp.run()
         return 0
-    kwargs = wrap_kwargs(args)
-    proc_kwargs = processor_kwargs(args)
     if args.listen:
         tokenizer, model, _ = init(
             args.model_name, args.bits, args.dtype, args.file_type, None, None,
-            args.verbose, **proc_kwargs)
-        start_server(
-            args.port, tokenizer, model, args.file_type, kwargs, proc_kwargs)
+            args.verbose, config['spaces'], config['indent_type'])
+        start_server(args.port, tokenizer, model, args.file_type, config)
         return 0
     if args.input_file is not None:
         with open(args.input_file, 'r', encoding='utf-8') as f:
             text = f.read()
-    elif not STDIN_TTY:
+    elif not _safe_isatty(sys.stdin):
         text = sys.stdin.read()
     else:
         parser.print_help()
@@ -290,13 +256,13 @@ def main() -> int:
         return 1
     if check_server(args.server, args.port):
         result = rewrap_on_server(
-            text, args.server, args.port, kwargs, proc_kwargs)
+            text, args.server, args.port, config, args.file_type)
     else:
-        from .inference import sembr
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype,
-            args.file_type, args.input_file, text, args.verbose, **proc_kwargs)
-        result = sembr(text, tokenizer, model, processor, **kwargs)
+            args.file_type, args.input_file, text, args.verbose,
+            config['spaces'], config['indent_type'])
+        _, result = rewrap_text(text, tokenizer, model, config, processor)
     if args.output_file is None:
         print(result)
         return 0

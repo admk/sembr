@@ -67,4 +67,6 @@ def get_processor(file_type=None, file_path=None, text=None, verbose=False, **kw
         processor_cls = PlainTextProcessor
     if verbose:
         print(f"Using processor: {processor_cls.__name__}", file=sys.stderr)
-    return processor_cls(**kwargs)
+    return processor_cls(
+        spaces=kwargs.get('spaces', 4),
+        indent_type=kwargs.get('indent_type', 'space'))
