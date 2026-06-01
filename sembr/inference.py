@@ -56,10 +56,10 @@ def _line_length_loss(length, lower, upper, weight=1.0):
     return float(weight * (length - upper) ** 2)
 
 
-def _boundary_loss(start, off_logits, break_logits):
+def _boundary_cost_delta(start, off_costs, break_costs):
     if start == 0:
         return 0.0
-    return float(off_logits[start].item() - break_logits[start].item())
+    return float((break_costs[start] - off_costs[start]).item())
 
 
 class _LiChaoLine:
@@ -258,10 +258,12 @@ def predict_balanced_linebreaks(
         row_logits = logits[b, :num_tokens]
         break_logits, break_labels = row_logits[:, 1:].max(dim=1)
         break_labels += 1
-        off_logits = row_logits[:, 0]
-        off_prefix = torch.cat([
-            off_logits.new_zeros(1),
-            torch.cumsum(off_logits, dim=0),
+        log_probs = row_logits.log_softmax(dim=1)
+        off_costs = -log_probs[:, 0]
+        break_costs = -torch.logsumexp(log_probs[:, 1:], dim=1)
+        off_cost_prefix = torch.cat([
+            off_costs.new_zeros(1),
+            torch.cumsum(off_costs, dim=0),
         ])
 
         dp = [float('inf')] * (num_tokens + 1)
@@ -317,11 +319,12 @@ def predict_balanced_linebreaks(
                 ))
 
             best_value, best_start = min(candidates)
-            dp[end] = best_value - float(off_prefix[end].item())
+            dp[end] = best_value + float(off_cost_prefix[end].item())
             prev[end] = best_start
-            values[end] = dp[end] + float(off_prefix[end].item())
+            values[end] = dp[end] - float(off_cost_prefix[end].item())
             if end < num_tokens:
-                values[end] += _boundary_loss(end, off_logits, break_logits)
+                values[end] += _boundary_cost_delta(
+                    end, off_costs, break_costs)
 
         start = prev[num_tokens]
         while start > 0:

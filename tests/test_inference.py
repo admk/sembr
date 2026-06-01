@@ -62,12 +62,14 @@ def _predict_balanced_linebreaks_brute(logits, counts, tokens_per_line):
     for b in range(logits.shape[0]):
         num_tokens = int(counts[b].sum().item())
         row_logits = logits[b, :num_tokens]
-        break_logits, break_labels = row_logits[:, 1:].max(dim=1)
+        _, break_labels = row_logits[:, 1:].max(dim=1)
         break_labels += 1
-        off_logits = row_logits[:, 0]
-        off_prefix = torch.cat([
-            off_logits.new_zeros(1),
-            torch.cumsum(off_logits, dim=0),
+        log_probs = row_logits.log_softmax(dim=1)
+        off_costs = -log_probs[:, 0]
+        break_costs = -torch.logsumexp(log_probs[:, 1:], dim=1)
+        off_cost_prefix = torch.cat([
+            off_costs.new_zeros(1),
+            torch.cumsum(off_costs, dim=0),
         ])
 
         dp = [float('inf')] * (num_tokens + 1)
@@ -75,10 +77,11 @@ def _predict_balanced_linebreaks_brute(logits, counts, tokens_per_line):
         dp[0] = 0.0
         for end in range(1, num_tokens + 1):
             for start in range(0, end):
-                label_loss = -float((off_prefix[end] - off_prefix[start]).item())
+                label_loss = float(
+                    (off_cost_prefix[end] - off_cost_prefix[start]).item())
                 if start > 0:
-                    label_loss += float(off_logits[start].item())
-                    label_loss -= float(break_logits[start].item())
+                    label_loss -= float(off_costs[start].item())
+                    label_loss += float(break_costs[start].item())
                 loss = dp[start] + label_loss + _line_length_loss(
                     end - start, lower, upper, weight)
                 if loss < dp[end]:
@@ -107,6 +110,26 @@ def test_balanced_linebreaks_matches_brute_force_small_cases():
     expected = _predict_balanced_linebreaks_brute(logits, counts, (3, 5, 0.05))
 
     assert preds.tolist() == expected.tolist()
+
+
+def test_balanced_linebreaks_uses_total_break_probability_mass():
+    logits = torch.zeros((1, 6, 3))
+    logits[:, :, 0] = 0.0
+    logits[:, :, 1:] = -4.0
+    logits[0, 2, 1] = 0.6
+    logits[0, 2, 2] = 0.6
+    logits[0, 3, 1] = 1.0
+    counts = torch.ones((1, 6), dtype=torch.long)
+
+    preds = predict_balanced_linebreaks(
+        logits,
+        counts,
+        preferred_min_tokens_per_line=2,
+        preferred_max_tokens_per_line=4,
+        line_length_penalty_weight=2.0,
+    )
+
+    assert preds.tolist() == [[0, 0, 1, 0, 0, 0]]
 
 
 def test_balanced_linebreaks_line_length_penalty_can_be_tuned():

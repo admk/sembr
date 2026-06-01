@@ -213,8 +213,15 @@ The `balanced_linebreaks` algorithm
 optimizes line breaks with dynamic programming
 over each parsed paragraph.
 
-It scores candidate lines with the model logits
-and adds a quadratic penalty
+It precomputes token costs
+from the model log probabilities.
+A no-break token costs `-log P(off)`,
+and a break token costs `-log P(breaks)`.
+After choosing break positions,
+it uses the highest-scoring indent level
+at each chosen position to recover the break type.
+
+The objective also adds a quadratic penalty
 when the token count falls outside
 `optimize.preferred_min_tokens_per_line`
 and `optimize.preferred_max_tokens_per_line`.
@@ -225,12 +232,10 @@ For a paragraph with `n` tokens,
 the implementation uses prefix sums,
 a monotonic queue for the no-penalty range,
 and a Li Chao tree for long-line penalties.
-The usual complexity is `O(n log n)`
-when the preferred lower target is small and fixed;
-the worst case is `O(n^2)`
-if that target grows with paragraph length.
-Memory usage is `O(n)` per paragraph,
-not counting model logits.
+The optimization complexity is
+`O(n * l + n log n)`,
+where `l` is `optimize.preferred_min_tokens_per_line`.
+Memory usage is `O(n)` per paragraph.
 
 #### MCP Server
 
