@@ -17,9 +17,9 @@ overlap_divisor = 8
 [optimize]
 # Prediction algorithm, supports:
 #   argmax, logit_adjustment, greedy_linebreaks, or balanced_linebreaks.
-algorithm = "argmax"
-# preferred_min_tokens_per_line = 8  # Preferred lower target
-# preferred_max_tokens_per_line = 12  # Preferred upper target
+algorithm = "balanced_linebreaks"
+preferred_min_tokens_per_line = 8
+preferred_max_tokens_per_line = 10
 # Penalty weight for line lengths outside the preferred range.
 line_length_penalty_weight = 0.05
 
