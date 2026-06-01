@@ -143,7 +143,7 @@ sembr \
   -c model.name=/path/to/model \
   -c optimize.algorithm=balanced_linebreaks \
   -c optimize.preferred_min_tokens_per_line=8 \
-  -c optimize.preferred_max_tokens_per_line=12 \
+  -c optimize.preferred_max_tokens_per_line=10 \
   -c optimize.line_length_penalty_weight=0.05
 ```
 
@@ -167,11 +167,13 @@ The supported config keys are:
   The prediction function to use.
   Options are `argmax`, `logit_adjustment`, `greedy_linebreaks`,
   and `balanced_linebreaks`.
-  Default is `argmax`.
+  Default is `balanced_linebreaks`.
 * `optimize.preferred_min_tokens_per_line`:
   Preferred lower line length target.
+  Default is `8`.
 * `optimize.preferred_max_tokens_per_line`:
   Preferred upper line length target.
+  Default is `10`.
 * `optimize.line_length_penalty_weight`:
   Penalty weight for line lengths outside the preferred range.
   The default is `0.05`.
