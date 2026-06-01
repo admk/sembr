@@ -109,7 +109,6 @@ def rewrap_text(
     from .processors import get_processor
 
     if processor is None:
-        text = text if file_path is None and not file_type else None
         processor = get_processor(
             file_type, file_path, text, verbose, **config)
     return (
@@ -119,7 +118,7 @@ def rewrap_text(
 
 
 def start_server(
-    port, tokenizer, model, default_file_type=None, default_config=None
+    host, port, tokenizer, model, default_file_type=None, default_config=None
 ):
     from flask import Flask, request
     app = Flask(__name__)
@@ -160,16 +159,16 @@ def start_server(
                 'file_type': file_type,
             }
 
-    app.run(port=port)
+    app.run(host=host, port=port)
     return app
 
 
-def _fetch(server, port, endpoint, method='get', data=None, timeout=None):
+def _fetch(host, port, endpoint, method='get', data=None, timeout=None):
     import requests
     from requests.exceptions import ConnectionError, ReadTimeout
     try:
         results = getattr(requests, method.lower())(
-            f'http://{server}:{port}/{endpoint}', data=data, timeout=timeout)
+            f'http://{host}:{port}/{endpoint}', data=data, timeout=timeout)
     except (ConnectionError, ReadTimeout) as e:
         raise RuntimeError(f'Connection Error: {e}')
     if results.status_code != 200:
@@ -184,18 +183,18 @@ def _fetch(server, port, endpoint, method='get', data=None, timeout=None):
     return data
 
 
-def check_server(server, port):
-    if not server:
+def check_server(host, port):
+    if not host:
         return False
     try:
-        _fetch(server, port, 'check', timeout=0.3)
+        _fetch(host, port, 'check', timeout=0.3)
     except RuntimeError:
         return False
     return True
 
 
 def rewrap_on_server(
-    text, server, port, config, file_type=None
+    text, host, port, config, file_type=None
 ):
     data = [('text', text)]
     if file_type is not None:
@@ -208,7 +207,7 @@ def rewrap_on_server(
         )
         for attr, field in SembrConfig.model_fields.items()
         if attr in config)
-    response = _fetch(server, port, 'rewrap', 'post', data)
+    response = _fetch(host, port, 'rewrap', 'post', data)
     return response['text']
 
 
@@ -243,7 +242,8 @@ def main() -> int:
         tokenizer, model, _ = init(
             args.model_name, args.bits, args.dtype, args.file_type, None, None,
             args.verbose, config['spaces'], config['indent_type'])
-        start_server(args.port, tokenizer, model, args.file_type, config)
+        start_server(
+            args.host, args.port, tokenizer, model, args.file_type, config)
         return 0
     if args.input_file is not None:
         with open(args.input_file, 'r', encoding='utf-8') as f:
@@ -254,9 +254,9 @@ def main() -> int:
         parser.print_help()
         print('\nNo input file or stdin text provided.', file=sys.stderr)
         return 1
-    if check_server(args.server, args.port):
+    if check_server(args.host, args.port):
         result = rewrap_on_server(
-            text, args.server, args.port, config, args.file_type)
+            text, args.host, args.port, config, args.file_type)
     else:
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype,

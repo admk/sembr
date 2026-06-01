@@ -30,8 +30,8 @@ num_spaces = "auto"
 # Indentation unit to emit; valid values are "space", "tab", or "auto".
 indent_type = "auto"
 
-[server]
-# API server IP address checked by clients.
-ip = "127.0.0.1"
-# API server port.
+[listen]
+# API server host checked by clients and bound by --listen.
+host = "127.0.0.1"
+# API server port checked by clients and bound by --listen.
 port = 8384

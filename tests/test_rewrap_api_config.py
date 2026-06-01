@@ -26,8 +26,10 @@ def test_rewrap_accepts_repeated_cli_config_fields(monkeypatch):
         return 'wrapped'
 
     monkeypatch.setattr('sembr.inference.sembr', fake_sembr)
-    monkeypatch.setattr('flask.Flask.run', lambda self, port: None)
+    monkeypatch.setattr(
+        'flask.Flask.run', lambda self, host, port: None)
     app = start_server(
+        '127.0.0.1',
         8384,
         DummyTokenizer(),
         DummyModel(),
@@ -41,6 +43,8 @@ def test_rewrap_accepts_repeated_cli_config_fields(monkeypatch):
             'overlap_divisor': 8,
             'spaces': 4,
             'indent_type': 'space',
+            'host': '127.0.0.1',
+            'port': 8384,
         },
     )
 
@@ -68,8 +72,8 @@ def test_rewrap_accepts_repeated_cli_config_fields(monkeypatch):
 def test_rewrap_on_server_sends_config_key_value_pairs(monkeypatch):
     captured = {}
 
-    def fake_fetch(server, port, endpoint, method='get', data=None, timeout=None):
-        captured['server'] = server
+    def fake_fetch(host, port, endpoint, method='get', data=None, timeout=None):
+        captured['host'] = host
         captured['port'] = port
         captured['endpoint'] = endpoint
         captured['method'] = method
@@ -91,6 +95,8 @@ def test_rewrap_on_server_sends_config_key_value_pairs(monkeypatch):
     )
 
     assert result == 'wrapped'
+    assert captured['host'] == '127.0.0.1'
+    assert captured['port'] == 8384
     assert captured['endpoint'] == 'rewrap'
     assert captured['method'] == 'post'
     assert captured['data'] == [

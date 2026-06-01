@@ -184,10 +184,10 @@ The supported config keys are:
   Options are `space`, `tab`, and `auto`.
   `auto` detects space or tab indentation from the input.
   The default is `space`.
-* `server.ip`:
-  The IP address of the SemBr API server.
+* `listen.host`:
+  The host address of the SemBr API server.
   The default is `127.0.0.1`.
-* `server.port`:
+* `listen.port`:
   The port for the SemBr API server.
   The default is `8384`.
 

@@ -51,7 +51,7 @@ def _start_actual_sembr_listener():
     proc = subprocess.Popen(
         [
             'uv', 'run', 'sembr', '--listen',
-            '-c', f'server.port={port}',
+            '-c', f'listen.port={port}',
         ],
         cwd=REPO_ROOT,
         env=env,
@@ -90,7 +90,7 @@ def _check_with_actual_sembr(test_file: Path, port: int, env: dict) -> tuple[boo
         result = subprocess.run([
             'uv', 'run', 'sembr',
             '--file-type', 'markdown',
-            '-c', f'server.port={port}',
+            '-c', f'listen.port={port}',
             '-i', str(test_file),
             '-o', str(output_file)
         ], capture_output=True, text=True, cwd=test_file.parent.parent, env=env)

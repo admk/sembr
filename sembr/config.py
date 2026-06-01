@@ -29,8 +29,8 @@ class SembrConfig(BaseModel):
         alias='format.num_spaces')
     indent_type: Literal['space', 'tab', 'auto'] = Field(
         alias='format.indent_type')
-    server: str = Field(alias='server.ip')
-    port: PositiveInt = Field(alias='server.port')
+    host: str = Field(alias='listen.host')
+    port: PositiveInt = Field(alias='listen.port')
 
     model_config = ConfigDict(populate_by_name=True, extra='forbid')
 
@@ -93,8 +93,35 @@ def _normalized_hamming_distance(left, right):
     return _hamming_distance(left, right) / max_length
 
 
+def _config_key_section(key):
+    return key.split('.', 1)[0]
+
+
+def _config_key_leaf(key):
+    return key.rsplit('.', 1)[-1]
+
+
 def _closest_config_key(key):
     valid_keys = _valid_config_keys()
+    same_leaf = [
+        valid_key
+        for valid_key in valid_keys
+        if _config_key_leaf(valid_key) == _config_key_leaf(key)
+    ]
+    if same_leaf:
+        return min(
+            same_leaf,
+            key=lambda valid_key: (
+                _normalized_hamming_distance(key, valid_key),
+                _hamming_distance(key, valid_key),
+                valid_key))
+    same_section = [
+        valid_key
+        for valid_key in valid_keys
+        if _config_key_section(valid_key) == _config_key_section(key)
+    ]
+    if same_section:
+        valid_keys = same_section
     closest = min(
         valid_keys,
         key=lambda valid_key: (
