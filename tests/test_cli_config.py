@@ -163,7 +163,53 @@ def test_load_config_rejects_unknown_key(tmp_path):
         load_config(path=path)
     except ValueError as e:
         assert 'model.unknown' in str(e)
-        assert 'Extra inputs are not permitted' in str(e)
+        assert 'Valid keys are:' in str(e)
+        assert 'model.name' in str(e)
+        assert 'Extra inputs are not permitted' not in str(e)
+    else:
+        raise AssertionError('load_config accepted an unknown key')
+
+
+def test_load_config_rejects_legacy_option_names_with_replacements(tmp_path):
+    path = tmp_path / 'config.toml'
+    path.write_text(
+        '\n'.join([
+            '[optimize]',
+            'min_tokens_per_line = 8',
+            'max_tokens_per_line = 12',
+            'length_loss_weight = 0.05',
+        ]),
+        encoding='utf-8')
+
+    try:
+        load_config(path=path)
+    except ValueError as e:
+        message = str(e)
+        assert 'optimize.min_tokens_per_line' in message
+        assert 'optimize.preferred_min_tokens_per_line' in message
+        assert 'optimize.max_tokens_per_line' in message
+        assert 'optimize.preferred_max_tokens_per_line' in message
+        assert 'optimize.length_loss_weight' in message
+        assert 'optimize.line_length_penalty_weight' in message
+        assert 'did you mean' in message
+        assert 'use "' not in message
+        assert 'Extra inputs are not permitted' not in message
+        assert 'errors for SembrConfig' not in message
+    else:
+        raise AssertionError('load_config accepted legacy option names')
+
+
+def test_load_config_rejects_unknown_key_with_suggestion(tmp_path):
+    path = tmp_path / 'config.toml'
+    path.write_text(
+        '[optimize]\npreferred_max_token_per_line = 12',
+        encoding='utf-8')
+
+    try:
+        load_config(path=path)
+    except ValueError as e:
+        assert 'optimize.preferred_max_token_per_line' in str(e)
+        assert 'did you mean "optimize.preferred_max_tokens_per_line"' in str(e)
     else:
         raise AssertionError('load_config accepted an unknown key')
 

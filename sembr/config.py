@@ -1,8 +1,9 @@
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, PositiveInt
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt, ValidationError
 from pydantic import field_validator, model_validator
 
 
@@ -50,6 +51,104 @@ class SembrConfig(BaseModel):
                 'must be less than or equal to '
                 '"optimize.preferred_max_tokens_per_line".')
         return self
+
+
+def _valid_config_keys():
+    return tuple(
+        field.alias for field in SembrConfig.model_fields.values()
+    )
+
+
+def _format_error_location(location):
+    if not location:
+        return ''
+    return '.'.join(str(part) for part in location)
+
+
+def _clean_pydantic_message(message):
+    prefix = 'Value error, '
+    if message.startswith(prefix):
+        return message[len(prefix):]
+    return message
+
+
+def _config_key_tokens(key):
+    return frozenset(
+        token for token in re.split(r'[._-]+', key) if token)
+
+
+def _hamming_distance(left, right):
+    left_tokens = _config_key_tokens(left)
+    right_tokens = _config_key_tokens(right)
+    vocabulary = left_tokens | right_tokens
+    return sum(
+        (token in left_tokens) != (token in right_tokens)
+        for token in vocabulary)
+
+
+def _normalized_hamming_distance(left, right):
+    max_length = len(_config_key_tokens(left) | _config_key_tokens(right))
+    if max_length == 0:
+        return 0
+    return _hamming_distance(left, right) / max_length
+
+
+def _closest_config_key(key):
+    valid_keys = _valid_config_keys()
+    closest = min(
+        valid_keys,
+        key=lambda valid_key: (
+            _normalized_hamming_distance(key, valid_key),
+            _hamming_distance(key, valid_key),
+            valid_key))
+    if _normalized_hamming_distance(key, closest) <= 0.5:
+        return closest
+    return None
+
+
+def _format_unknown_key_error(key):
+    closest = _closest_config_key(key)
+    if closest:
+        return (
+            f'Unknown config key "{key}"; '
+            f'did you mean "{closest}"?')
+    return (
+        f'Unknown config key "{key}". '
+        f'Valid keys are: {", ".join(_valid_config_keys())}.')
+
+
+def _format_validation_error_item(error):
+    key = _format_error_location(error.get('loc', ()))
+    error_type = error.get('type')
+    message = _clean_pydantic_message(error.get('msg', 'Invalid value'))
+    value = error.get('input')
+    if error_type == 'extra_forbidden':
+        return _format_unknown_key_error(key)
+    if not key:
+        return message
+    if error_type == 'literal_error':
+        expected = error.get('ctx', {}).get('expected')
+        if expected:
+            return (
+                f'Invalid value for "{key}": {value!r}. '
+                f'Expected {expected}.')
+    return f'Invalid value for "{key}": {value!r}. {message}.'
+
+
+def _format_validation_error(error):
+    details = [
+        _format_validation_error_item(item)
+        for item in error.errors(include_url=False)
+    ]
+    return 'Validation failed:\n' + '\n'.join(
+        f'  - {detail}' for detail in details)
+
+
+def _validate_config(data):
+    try:
+        return SembrConfig.model_validate(data)
+    except ValidationError as e:
+        raise ValueError(_format_validation_error(e)) from None
 
 
 def config_path():
@@ -120,7 +219,7 @@ def load_config(
     for override in overrides or []:
         key, value = _parse_config_override(override)
         data[key] = value
-    return SembrConfig.model_validate(data).model_dump()
+    return _validate_config(data).model_dump()
 
 
 def apply_config(
