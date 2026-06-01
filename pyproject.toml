@@ -12,7 +12,7 @@ description = "A semantic linebreaker powered by transformers"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.12"
 dependencies = [
     "fastmcp",
     "flask",
@@ -22,10 +22,9 @@ dependencies = [
     "requests",
     "torch; sys_platform == 'darwin' or sys_platform == 'linux'",
     "tqdm",
-    "transformers",
+    "transformers==5.9.0",
     "tree-sitter>=0.25.0",
     "tree-sitter-markdown>=0.3.2",
-    "tomli; python_version < '3.11'",
 ]
 
 classifiers = [

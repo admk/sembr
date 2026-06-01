@@ -90,7 +90,7 @@ def init(
     model = _from_pretrained(
         AutoModelForTokenClassification,
         model_name,
-        torch_dtype=dtype,
+        dtype=dtype,
         **model_kwargs)
     if device is not None:
         model = model.to(device)
