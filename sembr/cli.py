@@ -66,14 +66,16 @@ def init(
     from .processors import get_processor
 
     tokenizer = _from_pretrained(AutoTokenizer, model_name)
-    dtype = getattr(torch, dtype) if dtype is not None else torch.float32
+    requested_dtype = getattr(torch, dtype) if dtype is not None else None
+    compute_dtype = (
+        requested_dtype if requested_dtype is not None else torch.float32)
     model_kwargs = {}
     device = None
     if torch.cuda.is_available():
         if bits == 4:
             from transformers import BitsAndBytesConfig
             model_kwargs['quantization_config'] = BitsAndBytesConfig(
-                load_in_4bit=True, bnb_4bit_compute_dtype=dtype)
+                load_in_4bit=True, bnb_4bit_compute_dtype=compute_dtype)
             model_kwargs['device_map'] = 'cuda'
         elif bits == 8:
             from transformers import BitsAndBytesConfig
@@ -86,11 +88,12 @@ def init(
         if bits in [4, 8]:
             raise RuntimeError('MPS does not support quantization.')
         device = 'mps'
+    if requested_dtype is not None:
+        model_kwargs['torch_dtype'] = requested_dtype
 
     model = _from_pretrained(
         AutoModelForTokenClassification,
         model_name,
-        dtype=dtype,
         **model_kwargs)
     if device is not None:
         model = model.to(device)
