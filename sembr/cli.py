@@ -59,13 +59,36 @@ def _from_pretrained(model_class, model_name, **kwargs):
 
 def init(
     model_name, bits=None, dtype=None, file_type=None, file_path=None,
-    text=None, verbose=False, spaces=4, indent_type='space'
+    text=None, verbose=False, spaces=4, indent_type='space',
+    backend='torch', quantization='none',
 ):
-    import torch
-    from transformers import AutoTokenizer, AutoModelForTokenClassification
+    from transformers import AutoTokenizer
     from .processors import get_processor
 
     tokenizer = _from_pretrained(AutoTokenizer, model_name)
+    if backend == 'torch':
+        model = _init_torch_model(model_name, bits, dtype, quantization)
+    elif backend == 'mlx':
+        from .mlx_backend import load_mlx_bert_token_classifier
+        model = load_mlx_bert_token_classifier(
+            model_name, dtype=dtype, quantization=quantization)
+    else:
+        raise RuntimeError(f'Unsupported model backend: {backend!r}.')
+    processor = get_processor(
+        file_type, file_path, text, verbose,
+        spaces=spaces, indent_type=indent_type)
+    return tokenizer, model, processor
+
+
+def _init_torch_model(model_name, bits=None, dtype=None, quantization='none'):
+    import torch
+    from transformers import AutoModelForTokenClassification
+
+    if quantization != 'none':
+        raise RuntimeError(
+            'model.quantization is only supported with model.backend="mlx". '
+            'Use model.bits=4 or model.bits=8 for CUDA quantization.')
+
     requested_dtype = getattr(torch, dtype) if dtype is not None else None
     compute_dtype = (
         requested_dtype if requested_dtype is not None else torch.float32)
@@ -98,10 +121,7 @@ def init(
     if device is not None:
         model = model.to(device)
     model.eval()
-    processor = get_processor(
-        file_type, file_path, text, verbose,
-        spaces=spaces, indent_type=indent_type)
-    return tokenizer, model, processor
+    return model
 
 
 def rewrap_text(
@@ -244,7 +264,8 @@ def main() -> int:
     if args.listen:
         tokenizer, model, _ = init(
             args.model_name, args.bits, args.dtype, args.file_type, None, None,
-            args.verbose, config['spaces'], config['indent_type'])
+            args.verbose, config['spaces'], config['indent_type'],
+            args.backend, args.quantization)
         start_server(
             args.host, args.port, tokenizer, model, args.file_type, config)
         return 0
@@ -264,7 +285,8 @@ def main() -> int:
         tokenizer, model, processor = init(
             args.model_name, args.bits, args.dtype,
             args.file_type, args.input_file, text, args.verbose,
-            config['spaces'], config['indent_type'])
+            config['spaces'], config['indent_type'],
+            args.backend, args.quantization)
         _, result = rewrap_text(text, tokenizer, model, config, processor)
     if args.output_file is None:
         print(result)

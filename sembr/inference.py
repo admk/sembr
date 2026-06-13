@@ -1,6 +1,7 @@
 from collections import deque
 
 import torch
+import numpy as np
 from tqdm import trange
 
 
@@ -136,6 +137,10 @@ class _LiChaoMin:
 
 
 def _tiled_inference(model, collator, results, batch_size, overlap_divisor):
+    if getattr(model, 'device', None) == 'mlx':
+        return _tiled_mlx_inference(
+            model, collator, results, batch_size, overlap_divisor)
+
     device = model.device
     max_length = model.config.max_position_embeddings
     overlap_length = int(max_length / overlap_divisor)
@@ -163,6 +168,43 @@ def _tiled_inference(model, collator, results, batch_size, overlap_divisor):
                     input_ids=inids, attention_mask=attns, return_dict=True)
             logits[bindices, islice] += outputs.logits
             counts[bindices, islice] += attns
+    attns = counts > 0
+    logits /= counts.unsqueeze(-1)
+    logits[~attns] = 0
+    return logits, attns
+
+
+def _tiled_mlx_inference(model, collator, results, batch_size, overlap_divisor):
+    import mlx.core as mx
+
+    device = 'cpu'
+    max_length = model.config.max_position_embeddings
+    overlap_length = int(max_length / overlap_divisor)
+    input_ids = [{'input_ids': r['input_ids']} for r in results]
+    num_paras = len(input_ids)
+    lengths = [len(i['input_ids']) for i in input_ids]
+    sorted_indices = sorted(
+        range(num_paras), key=lambda i: lengths[i], reverse=True)
+    logits = torch.zeros(
+        (num_paras, max(lengths), model.config.num_labels), device=device)
+    counts = torch.zeros(
+        (num_paras, max(lengths)), dtype=torch.long, device=device)
+    for b in trange(0, num_paras, batch_size):
+        bslice = slice(b, min(num_paras, b + batch_size))
+        bindices = sorted_indices[bslice]
+        binids = [input_ids[i] for i in bindices]
+        data = collator(binids, return_tensors='pt')
+        num_tokens = data['input_ids'].shape[1]
+        for i in range(0, num_tokens, max_length - overlap_length):
+            islice = slice(i, min(num_tokens, i + max_length))
+            inids = mx.array(data['input_ids'][:, islice].numpy())
+            attns = mx.array(data['attention_mask'][:, islice].numpy())
+            outputs = model(
+                input_ids=inids, attention_mask=attns, return_dict=True)
+            mx.eval(outputs.logits)
+            logits[bindices, islice] += torch.from_numpy(
+                np.array(outputs.logits.astype(mx.float32)))
+            counts[bindices, islice] += data['attention_mask'][:, islice]
     attns = counts > 0
     logits /= counts.unsqueeze(-1)
     logits[~attns] = 0
@@ -358,6 +400,8 @@ def inference(
     results = processor.tokenize_with_modes(tokenizer, results)
     logits, counts = _tiled_inference(
         model, collator, results, batch_size, overlap_divisor)
+    logits = logits.cpu()
+    counts = counts.cpu()
     preds = PREDICT_FUNC_MAP[predict_func](
         logits,
         counts,

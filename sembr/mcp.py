@@ -40,7 +40,8 @@ def get_sembr_model() -> SembrModel:
     config = vars(args)
     tokenizer, model, _ = init(
         args.model_name, args.bits, args.dtype, args.file_type,
-        spaces=config['spaces'], indent_type=config['indent_type'])
+        spaces=config['spaces'], indent_type=config['indent_type'],
+        backend=args.backend, quantization=args.quantization)
     _sembr_model = SembrModel(tokenizer, model, args.file_type, config)
     return _sembr_model
 

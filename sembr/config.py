@@ -9,8 +9,11 @@ from pydantic import field_validator, model_validator
 
 class SembrConfig(BaseModel):
     model_name: str = Field(alias='model.name')
+    backend: Literal['torch', 'mlx'] = Field(alias='model.backend')
     bits: int | None = Field(default=None, alias='model.bits')
     dtype: str | None = Field(default=None, alias='model.dtype')
+    quantization: Literal['none', 'affine', 'mxfp4', 'mxfp8', 'nvfp4'] = Field(
+        alias='model.quantization')
     batch_size: PositiveInt = Field(alias='inference.batch_size')
     overlap_divisor: PositiveInt = Field(alias='inference.overlap_divisor')
     predict_func: Literal[
@@ -216,10 +219,11 @@ def _parse_config_override(override):
         raise ValueError(
             f'Config override {override!r} must use KEY=VALUE syntax.')
     key, value = override.split('=', 1)
+    key = key.strip().replace('-', '_')
     value = value.strip()
-    if value.lower() in ['none', 'null']:
+    if value.lower() in ['none', 'null'] and key != 'model.quantization':
         value = None
-    return key.strip().replace('-', '_'), value
+    return key, value
 
 
 CONFIG_FILE_DEFAULTS = _flatten_config_table(_load_toml(default_config_path()))

@@ -3,10 +3,16 @@
 [model]
 # Hugging Face model name or local model path.
 name = "admko/sembr2023-bert-small"
+# Inference backend. "torch" supports CUDA/MPS/CPU through Transformers.
+# "mlx" is experimental and supports BERT token classification on Apple Silicon.
+backend = "torch"
 # CUDA quantization bits; valid values are 4 or 8, and MPS is not supported.
 # bits = 4
 # Model dtype override, such as "float16" or "bfloat16"; unset uses torch.float32.
 # dtype = "float16"
+# MLX weight quantization mode. Set to "nvfp4" with model.backend="mlx" to
+# reduce linear-layer weight memory using MLX's NVFP4 quantized matmul path.
+quantization = "none"
 
 [inference]
 # Number of parsed paragraphs to process in each model batch.

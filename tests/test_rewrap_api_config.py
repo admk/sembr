@@ -36,6 +36,11 @@ def test_rewrap_accepts_repeated_cli_config_fields(monkeypatch):
         default_file_type='plaintext',
         default_config={
             'batch_size': 8,
+            'backend': 'torch',
+            'bits': None,
+            'dtype': None,
+            'model_name': 'dummy',
+            'quantization': 'none',
             'predict_func': 'argmax',
             'preferred_min_tokens_per_line': None,
             'preferred_max_tokens_per_line': None,

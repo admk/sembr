@@ -23,8 +23,10 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
         '\n'.join([
             '[model]',
             'name = "local-model"',
+            'backend = "mlx"',
             'bits = 8',
             'dtype = "float16"',
+            'quantization = "nvfp4"',
             '',
             '[inference]',
             'batch_size = 4',
@@ -56,6 +58,7 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
     assert config == {
         **CONFIG_DEFAULTS,
         'model_name': 'local-model',
+        'backend': 'mlx',
         'batch_size': 16,
         'overlap_divisor': 2,
         'predict_func': 'greedy_linebreaks',
@@ -66,7 +69,42 @@ def test_load_config_reads_toml_and_applies_overrides(tmp_path):
         'port': 9000,
         'bits': 4,
         'dtype': 'float16',
+        'quantization': 'nvfp4',
     }
+
+
+def test_load_config_rejects_invalid_model_backend(tmp_path):
+    path = tmp_path / 'config.toml'
+    path.write_text('[model]\nbackend = "coreml"', encoding='utf-8')
+
+    try:
+        load_config(path=path)
+    except ValueError as e:
+        assert 'model.backend' in str(e)
+        assert 'torch' in str(e)
+        assert 'mlx' in str(e)
+    else:
+        raise AssertionError('load_config accepted an invalid backend')
+
+
+def test_load_config_accepts_mlx_nvfp4_quantization(tmp_path):
+    config = load_config(
+        [
+            'model.backend=mlx',
+            'model.quantization=nvfp4',
+        ],
+        path=tmp_path / 'missing.toml')
+
+    assert config['backend'] == 'mlx'
+    assert config['quantization'] == 'nvfp4'
+
+
+def test_load_config_accepts_quantization_none_override(tmp_path):
+    config = load_config(
+        ['model.quantization=none'],
+        path=tmp_path / 'missing.toml')
+
+    assert config['quantization'] == 'none'
 
 
 def test_load_config_accepts_balanced_linebreak_range(tmp_path):
@@ -231,6 +269,8 @@ def test_removed_options_are_no_longer_cli_arguments():
         '--port',
         '--bits',
         '--dtype',
+        '--backend',
+        '--quantization',
     ]:
         assert option not in help_text
     assert '-c KEY=VALUE' in help_text

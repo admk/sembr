@@ -52,6 +52,9 @@ quantization = [
     "accelerate; sys_platform == 'linux'",
     "bitsandbytes; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
+mlx = [
+    "mlx; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 train = [
     "accelerate; sys_platform == 'linux'",
     "datasets; sys_platform == 'linux'",

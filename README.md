@@ -119,6 +119,24 @@ Or on Linux:
 xclip -o | sembr | xclip -i
 ```
 
+You can also specify the following command-line options:
+
+* `-l`, `--listen`:
+  Serves the SemBr API on a local server.
+  - Each instance of `sembr` run
+    will detect if the API is accessible,
+    and if not it will run the model on its own.
+  - This option is useful
+    to avoid the time taken to initialize the model
+    by keeping it in memory in a separate process.
+* `--file-type <type>`:
+  File type (`plaintext`, `latex`, `markdown`, etc.).
+  Auto-detected using [Magika][magika] if not provided.
+* `--mcp`:
+  Start MCP server mode instead of processing text.
+
+#### Configurations
+
 Additionally,
 you can configure SemBr by creating
 `$XDG_CONFIG_HOME/sembr/config.toml`.
@@ -151,12 +169,24 @@ The supported config keys are:
 
 * `model.name`:
   The name of the Hugging Face model to use.
+* `model.backend`:
+  Inference backend to use.
+  `torch` is the default.
+  `mlx` is experimental
+  and currently supports BERT token classification models
+  on Apple Silicon.
 * `model.bits`:
   Quantization bits for model weights (`4` or `8`).
   Requires CUDA. Not supported on MPS.
 * `model.dtype`:
   Data type for model weights (e.g. `float16`, `bfloat16`).
   Default is `float32`.
+* `model.quantization`:
+  MLX weight quantization mode.
+  Set `model.backend=mlx`
+  and `model.quantization=nvfp4`
+  to use MLX NVFP4 quantized linear layers.
+  The default is `none`.
 * `inference.batch_size`:
   The number of lines to process in a batch.
   Default is `8`.
@@ -193,21 +223,36 @@ The supported config keys are:
   The port for the SemBr API server.
   The default is `8384`.
 
-You can also specify the following command-line options:
+#### Apple Silicon / MLX
 
-* `-l`, `--listen`:
-  Serves the SemBr API on a local server.
-  - Each instance of `sembr` run
-    will detect if the API is accessible,
-    and if not it will run the model on its own.
-  - This option is useful
-    to avoid the time taken to initialize the model
-    by keeping it in memory in a separate process.
-* `--file-type <type>`:
-  File type (`plaintext`, `latex`, `markdown`, etc.).
-  Auto-detected using [Magika][magika] if not provided.
-* `--mcp`:
-  Start MCP server mode instead of processing text.
+On Apple Silicon Macs,
+SemBr can use the experimental MLX backend with NVFP4 quantization,
+which is ~2x faster than torch+MPS.
+Install the MLX extra:
+
+```shell
+uv tool install "sembr[mlx]"
+```
+
+Use the quantized NVFP4 model:
+
+```shell
+sembr \
+  -c model.backend=mlx \
+  -c model.name=admko/sembr2023-bert-small-nvfp4 \
+  -c model.quantization=nvfp4 \
+  ...
+```
+
+To make this permanent,
+add the following to `~/.config/sembr/config.toml`:
+
+```toml
+[model]
+backend = "mlx"
+name = "admko/sembr2023-bert-small-nvfp4"
+quantization = "nvfp4"
+```
 
 #### Balanced line breaks
 
