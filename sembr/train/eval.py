@@ -4,8 +4,8 @@ import datasets
 import evaluate
 from transformers import AutoModelForTokenClassification, AutoTokenizer
 
-from .inference import inference
-from .process import SemBrProcessor
+from ..inference import inference
+from ..process import SemBrProcessor
 
 
 def checkpoints():

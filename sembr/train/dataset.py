@@ -2,8 +2,6 @@ import os
 import argparse
 import functools
 
-import datasets
-
 
 def _process_examples(
     examples, processor, tokenizer, mode_names, max_indent, label2id
@@ -55,6 +53,8 @@ def process_dataset(dataset, processor, tokenizer, max_indent, label2id):
 
 
 def init_dataset():
+    import datasets
+
     dataset_file = os.path.join(os.path.dirname(__file__), 'databuilder.py')
     return datasets.load_dataset(dataset_file)
 

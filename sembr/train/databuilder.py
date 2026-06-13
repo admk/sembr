@@ -3,7 +3,7 @@ import glob
 
 import datasets
 
-from .process import SemBrProcessor
+from ..process import SemBrProcessor
 
 
 logger = datasets.logging.get_logger(__name__)

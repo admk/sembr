@@ -1,15 +1,6 @@
-import os
-import sys
 import argparse
 
-import datasets
-from transformers import (
-    AutoTokenizer, AutoModelForTokenClassification,
-    TrainingArguments, Trainer, DataCollatorForTokenClassification)
-
-from .process import SemBrProcessor
-from .dataset import process_dataset
-from .utils import compute_metrics
+from ..process import SemBrProcessor
 
 
 def parse_args():
@@ -37,11 +28,11 @@ def parse_args():
     return args
 
 
-class DataCollatorForTokenClassificationWithTruncation(
-    DataCollatorForTokenClassification
-):
+class DataCollatorForTokenClassificationWithTruncation:
     def __init__(self, tokenizer, max_length=512, **kwargs):
-        super().__init__(tokenizer, **kwargs)
+        from transformers import DataCollatorForTokenClassification
+
+        self.collator = DataCollatorForTokenClassification(tokenizer, **kwargs)
         self.max_length = max_length
 
     def __call__(self, features, return_tensors=None):
@@ -49,10 +40,15 @@ class DataCollatorForTokenClassificationWithTruncation(
         for f in features:
             truncated_features.append(
                 {k: v[:self.max_length] for k, v in f.items()})
-        return super().__call__(truncated_features, return_tensors)
+        return self.collator(truncated_features, return_tensors)
 
 
 def init_dataset(args, label2id, max_length):
+    import datasets
+    from transformers import AutoTokenizer
+
+    from .dataset import process_dataset
+
     dataset = datasets.load_dataset(args.dataset_name)
     processor = SemBrProcessor()
     tokenizer = AutoTokenizer.from_pretrained(args.model)
@@ -68,6 +64,8 @@ def init_dataset(args, label2id, max_length):
 
 
 def init_model(model_name, max_indent):
+    from transformers import AutoModelForTokenClassification
+
     label_names = ['off'] + [
         f'{m}-{i}' for m in ['space', 'nospace']
         for i in range(max_indent + 1)]
@@ -80,6 +78,10 @@ def init_model(model_name, max_indent):
 
 
 def main(args):
+    from transformers import TrainingArguments, Trainer
+
+    from .utils import compute_metrics
+
     model = init_model(args.model, args.max_indent)
     max_length = model.config.max_position_embeddings
     train_dataset, test_dataset, tokenizer, collator = \
@@ -122,7 +124,3 @@ def main(args):
     trainer.train()
     if args.hub_user is not None:
         trainer.push_to_hub()
-
-
-if __name__ == '__main__':
-    main(parse_args())
