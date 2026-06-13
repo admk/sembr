@@ -69,8 +69,7 @@ def init(
         tokenizer = _from_pretrained(AutoTokenizer, model_name)
         model = _init_torch_model(model_name, bits, dtype, quantization)
     elif backend == 'mlx':
-        from .tokenizers import MlxTokenizer
-        from .mlx_backend import load_mlx_bert_token_classifier
+        from .mlx import MlxTokenizer, load_mlx_bert_token_classifier
         tokenizer = MlxTokenizer.from_pretrained(model_name)
         model = load_mlx_bert_token_classifier(
             model_name, dtype=dtype, quantization=quantization)

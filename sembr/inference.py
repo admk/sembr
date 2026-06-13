@@ -432,7 +432,7 @@ def inference(
         return []
 
     if getattr(model, 'device', None) == 'mlx':
-        from .tokenizers import NumpyTokenClassificationCollator
+        from .mlx import NumpyTokenClassificationCollator
         collator = NumpyTokenClassificationCollator(
             tokenizer, padding='longest')
     else:

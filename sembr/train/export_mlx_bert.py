@@ -1,7 +1,7 @@
 from pathlib import Path
 import sys
 
-from sembr.mlx_backend import (
+from sembr.mlx.backend import (
     EXPORT_FORMAT,
     EXPORT_METADATA_FILE,
     EXPORT_VERSION,

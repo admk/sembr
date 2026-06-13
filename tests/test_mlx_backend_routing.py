@@ -16,7 +16,7 @@ class DummyTokenizer:
         return cls()
 
 
-def test_init_routes_mlx_backend_to_mlx_loader(monkeypatch):
+def test_init_routes_mlx_to_loader(monkeypatch):
     captured = {}
 
     def fake_loader(model_name, *, dtype=None, quantization='none'):
@@ -27,10 +27,10 @@ def test_init_routes_mlx_backend_to_mlx_loader(monkeypatch):
 
     expected_tokenizer = object()
     monkeypatch.setattr(
-        'sembr.tokenizers.MlxTokenizer.from_pretrained',
+        'sembr.mlx.MlxTokenizer.from_pretrained',
         lambda model_name: expected_tokenizer)
     monkeypatch.setattr(
-        'sembr.mlx_backend.load_mlx_bert_token_classifier',
+        'sembr.mlx.load_mlx_bert_token_classifier',
         fake_loader)
 
     tokenizer, model, processor = init(

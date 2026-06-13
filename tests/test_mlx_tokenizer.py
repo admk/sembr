@@ -5,7 +5,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from sembr.tokenizers import MlxTokenizer, NumpyTokenClassificationCollator
+from sembr.mlx import MlxTokenizer, NumpyTokenClassificationCollator
 
 
 MODEL_PATH = 'checkpoints/sembr-bert-small-nvfp4'
