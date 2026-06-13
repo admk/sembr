@@ -1,6 +1,5 @@
 from collections import deque
 
-import torch
 import numpy as np
 from tqdm import trange
 
@@ -60,7 +59,32 @@ def _line_length_loss(length, lower, upper, weight=1.0):
 def _boundary_cost_delta(start, off_costs, break_costs):
     if start == 0:
         return 0.0
-    return float((break_costs[start] - off_costs[start]).item())
+    return float(break_costs[start] - off_costs[start])
+
+
+def _logsumexp(values, axis=None, keepdims=False):
+    maximum = np.max(values, axis=axis, keepdims=True)
+    summed = np.sum(np.exp(values - maximum), axis=axis, keepdims=True)
+    result = np.log(summed) + maximum
+    if keepdims:
+        return result
+    return np.squeeze(result, axis=axis)
+
+
+def _log_softmax(values, axis=-1):
+    return values - _logsumexp(values, axis=axis, keepdims=True)
+
+
+def _as_numpy(value):
+    if isinstance(value, np.ndarray):
+        return value
+    if hasattr(value, 'detach'):
+        value = value.detach()
+    if hasattr(value, 'cpu'):
+        value = value.cpu()
+    if hasattr(value, 'numpy'):
+        return value.numpy()
+    return np.asarray(value)
 
 
 class _LiChaoLine:
@@ -136,48 +160,43 @@ class _LiChaoMin:
         return best
 
 
-def _tiled_inference(model, collator, results, batch_size, overlap_divisor):
-    if getattr(model, 'device', None) == 'mlx':
-        return _tiled_mlx_inference(
-            model, collator, results, batch_size, overlap_divisor)
-
-    device = model.device
-    max_length = model.config.max_position_embeddings
-    overlap_length = int(max_length / overlap_divisor)
-    input_ids = [{'input_ids': r['input_ids']} for r in results]
-    num_paras = len(input_ids)
-    lengths = [len(i['input_ids']) for i in input_ids]
-    sorted_indices = sorted(
-        range(num_paras), key=lambda i: lengths[i], reverse=True)
-    logits = torch.zeros(
-        (num_paras, max(lengths), model.config.num_labels), device=device)
-    counts = torch.zeros(
-        (num_paras, max(lengths)), dtype=torch.long, device=device)
-    for b in trange(0, num_paras, batch_size):
-        bslice = slice(b, min(num_paras, b + batch_size))
-        bindices = sorted_indices[bslice]
-        binids = [input_ids[i] for i in bindices]
-        data = collator(binids, return_tensors='pt').to(device)
-        num_tokens = data['input_ids'].shape[1]
-        for i in range(0, num_tokens, max_length - overlap_length):
-            islice = slice(i, min(num_tokens, i + max_length))
-            inids = data['input_ids'][:, islice]
-            attns = data['attention_mask'][:, islice]
-            with torch.no_grad():
-                outputs = model(
-                    input_ids=inids, attention_mask=attns, return_dict=True)
-            logits[bindices, islice] += outputs.logits
-            counts[bindices, islice] += attns
-    attns = counts > 0
-    logits /= counts.unsqueeze(-1)
-    logits[~attns] = 0
-    return logits, attns
+def _torch_prepare_batch(data, device):
+    return data.to(device)
 
 
-def _tiled_mlx_inference(model, collator, results, batch_size, overlap_divisor):
+def _torch_infer_slice(model, data, islice):
+    import torch
+
+    inids = data['input_ids'][:, islice]
+    attns = data['attention_mask'][:, islice]
+    with torch.no_grad():
+        outputs = model(
+            input_ids=inids, attention_mask=attns, return_dict=True)
+    return (
+        outputs.logits.detach().float().cpu().numpy(),
+        attns.detach().cpu().numpy(),
+    )
+
+
+def _mlx_prepare_batch(data, device):
+    return data
+
+
+def _mlx_infer_slice(model, data, islice):
     import mlx.core as mx
 
-    device = 'cpu'
+    inids = mx.array(data['input_ids'][:, islice])
+    attns = mx.array(data['attention_mask'][:, islice])
+    outputs = model(input_ids=inids, attention_mask=attns, return_dict=True)
+    mx.eval(outputs.logits)
+    logits = np.array(outputs.logits.astype(mx.float32))
+    return logits, data['attention_mask'][:, islice]
+
+
+def _tiled_inference_with_backend(
+    model, collator, results, batch_size, overlap_divisor,
+    *, device, prepare_batch, infer_slice,
+):
     max_length = model.config.max_position_embeddings
     overlap_length = int(max_length / overlap_divisor)
     input_ids = [{'input_ids': r['input_ids']} for r in results]
@@ -185,30 +204,46 @@ def _tiled_mlx_inference(model, collator, results, batch_size, overlap_divisor):
     lengths = [len(i['input_ids']) for i in input_ids]
     sorted_indices = sorted(
         range(num_paras), key=lambda i: lengths[i], reverse=True)
-    logits = torch.zeros(
-        (num_paras, max(lengths), model.config.num_labels), device=device)
-    counts = torch.zeros(
-        (num_paras, max(lengths)), dtype=torch.long, device=device)
+    logits = np.zeros(
+        (num_paras, max(lengths), model.config.num_labels), dtype=np.float32)
+    counts = np.zeros((num_paras, max(lengths)), dtype=np.int64)
     for b in trange(0, num_paras, batch_size):
         bslice = slice(b, min(num_paras, b + batch_size))
         bindices = sorted_indices[bslice]
         binids = [input_ids[i] for i in bindices]
-        data = collator(binids, return_tensors='pt')
+        data = prepare_batch(collator(binids, return_tensors='pt'), device)
         num_tokens = data['input_ids'].shape[1]
         for i in range(0, num_tokens, max_length - overlap_length):
             islice = slice(i, min(num_tokens, i + max_length))
-            inids = mx.array(data['input_ids'][:, islice].numpy())
-            attns = mx.array(data['attention_mask'][:, islice].numpy())
-            outputs = model(
-                input_ids=inids, attention_mask=attns, return_dict=True)
-            mx.eval(outputs.logits)
-            logits[bindices, islice] += torch.from_numpy(
-                np.array(outputs.logits.astype(mx.float32)))
-            counts[bindices, islice] += data['attention_mask'][:, islice]
+            slice_logits, slice_counts = infer_slice(model, data, islice)
+            logits[bindices, islice] += slice_logits
+            counts[bindices, islice] += slice_counts
     attns = counts > 0
-    logits /= counts.unsqueeze(-1)
+    np.divide(
+        logits,
+        counts[..., None],
+        out=logits,
+        where=counts[..., None] > 0,
+    )
     logits[~attns] = 0
     return logits, attns
+
+
+def _tiled_inference(model, collator, results, batch_size, overlap_divisor):
+    if getattr(model, 'device', None) == 'mlx':
+        device = 'cpu'
+        prepare_batch = _mlx_prepare_batch
+        infer_slice = _mlx_infer_slice
+    else:
+        device = model.device
+        prepare_batch = _torch_prepare_batch
+        infer_slice = _torch_infer_slice
+    return _tiled_inference_with_backend(
+        model, collator, results, batch_size, overlap_divisor,
+        device=device,
+        prepare_batch=prepare_batch,
+        infer_slice=infer_slice,
+    )
 
 
 def _format_labels(id2label, preds, attns, results):
@@ -231,35 +266,40 @@ def _format_labels(id2label, preds, attns, results):
 
 
 def predict_argmax(logits, counts, **kwargs):
-    return logits.argmax(dim=2)
+    logits = _as_numpy(logits)
+    return logits.argmax(axis=2)
 
 
 def predict_logit_adjustment(logits, counts, **kwargs):
+    logits = _as_numpy(logits).copy()
     delta = 1.0
     logits[:, :, 0] -= delta
     logits[:, :, 1:] += delta / logits.shape[2]
-    return logits.argmax(dim=2)
+    return logits.argmax(axis=2)
 
 
 def predict_greedy_linebreaks(
     logits, counts, preferred_max_tokens_per_line=None, **kwargs
 ):
+    logits = _as_numpy(logits).copy()
+    counts = _as_numpy(counts)
     bounds = _line_length_bounds(
         preferred_max_tokens_per_line=preferred_max_tokens_per_line,
     )
     if bounds is None:
-        return logits.argmax(dim=2)
+        return logits.argmax(axis=2)
     _, preferred_max_tokens_per_line = bounds
     has_long_lines = True
     while has_long_lines:
         has_long_lines = False
         for b in range(logits.shape[0]):
-            modes, repeats = torch.unique_consecutive(
-                logits[b].argmax(dim=1), return_counts=True)
-            stops = torch.cumsum(repeats, dim=0)
-            starts = torch.cat([
-                torch.zeros(1, device=stops.device, dtype=stops.dtype),
-                stops[:-1]])
+            row_preds = logits[b].argmax(axis=1)
+            if row_preds.size == 0:
+                continue
+            starts = np.r_[0, np.nonzero(row_preds[1:] != row_preds[:-1])[0] + 1]
+            stops = np.r_[starts[1:], row_preds.size]
+            modes = row_preds[starts]
+            repeats = stops - starts
             long_lines = (
                 (modes == 0) & (repeats > preferred_max_tokens_per_line)
             )
@@ -271,7 +311,7 @@ def predict_greedy_linebreaks(
                 max_index = logits[b, s:e, 0].argmin(0)
                 # force linebreak by reducing "off" by -1e6
                 logits[b, s + max_index, 0] -= 1e6
-    return logits.argmax(dim=2)
+    return logits.argmax(axis=2)
 
 
 def predict_balanced_linebreaks(
@@ -280,33 +320,30 @@ def predict_balanced_linebreaks(
     preferred_max_tokens_per_line=None,
     line_length_penalty_weight=DEFAULT_LINE_LENGTH_PENALTY_WEIGHT,
 ):
+    logits = _as_numpy(logits)
+    counts = _as_numpy(counts)
     bounds = _line_length_bounds(
         preferred_min_tokens_per_line=preferred_min_tokens_per_line,
         preferred_max_tokens_per_line=preferred_max_tokens_per_line,
     )
     if bounds is None:
-        return logits.argmax(dim=2)
+        return logits.argmax(axis=2)
     lower, upper = bounds
     if line_length_penalty_weight < 0:
         raise ValueError('line_length_penalty_weight must be non-negative.')
 
-    preds = torch.zeros(
-        logits.shape[:2], dtype=torch.long, device=logits.device)
+    preds = np.zeros(logits.shape[:2], dtype=np.int64)
     for b in range(logits.shape[0]):
         num_tokens = int(counts[b].sum().item())
         if num_tokens == 0:
             continue
 
         row_logits = logits[b, :num_tokens]
-        break_logits, break_labels = row_logits[:, 1:].max(dim=1)
-        break_labels += 1
-        log_probs = row_logits.log_softmax(dim=1)
+        break_labels = row_logits[:, 1:].argmax(axis=1) + 1
+        log_probs = _log_softmax(row_logits, axis=1)
         off_costs = -log_probs[:, 0]
-        break_costs = -torch.logsumexp(log_probs[:, 1:], dim=1)
-        off_cost_prefix = torch.cat([
-            off_costs.new_zeros(1),
-            torch.cumsum(off_costs, dim=0),
-        ])
+        break_costs = -_logsumexp(log_probs[:, 1:], axis=1)
+        off_cost_prefix = np.r_[0.0, np.cumsum(off_costs)]
 
         dp = [float('inf')] * (num_tokens + 1)
         prev = [-1] * (num_tokens + 1)
@@ -393,15 +430,19 @@ def inference(
 ):
     if text.strip() == '':
         return []
-    from transformers import DataCollatorForTokenClassification
 
-    collator = DataCollatorForTokenClassification(tokenizer, padding='longest')
+    if getattr(model, 'device', None) == 'mlx':
+        from .tokenizers import NumpyTokenClassificationCollator
+        collator = NumpyTokenClassificationCollator(
+            tokenizer, padding='longest')
+    else:
+        from transformers import DataCollatorForTokenClassification
+        collator = DataCollatorForTokenClassification(
+            tokenizer, padding='longest')
     results = processor.parse_text(text, split=isinstance(text, str))
     results = processor.tokenize_with_modes(tokenizer, results)
     logits, counts = _tiled_inference(
         model, collator, results, batch_size, overlap_divisor)
-    logits = logits.cpu()
-    counts = counts.cpu()
     preds = PREDICT_FUNC_MAP[predict_func](
         logits,
         counts,

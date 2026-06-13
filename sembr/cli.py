@@ -62,14 +62,16 @@ def init(
     text=None, verbose=False, spaces=4, indent_type='space',
     backend='torch', quantization='none',
 ):
-    from transformers import AutoTokenizer
     from .processors import get_processor
 
-    tokenizer = _from_pretrained(AutoTokenizer, model_name)
     if backend == 'torch':
+        from transformers import AutoTokenizer
+        tokenizer = _from_pretrained(AutoTokenizer, model_name)
         model = _init_torch_model(model_name, bits, dtype, quantization)
     elif backend == 'mlx':
+        from .tokenizers import MlxTokenizer
         from .mlx_backend import load_mlx_bert_token_classifier
+        tokenizer = MlxTokenizer.from_pretrained(model_name)
         model = load_mlx_bert_token_classifier(
             model_name, dtype=dtype, quantization=quantization)
     else:

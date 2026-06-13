@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from types import SimpleNamespace
 import json
 from pathlib import Path
 
@@ -48,6 +49,19 @@ def _load_config(model_name):
         return AutoConfig.from_pretrained(model_name)
     except Exception:
         return AutoConfig.from_pretrained(model_name, local_files_only=True)
+
+
+def _load_exported_config(model_name):
+    config_path = _resolve_model_file(model_name, 'config.json')
+    with config_path.open('r', encoding='utf-8') as f:
+        data = json.load(f)
+    if 'id2label' in data:
+        data['id2label'] = {
+            int(key): value for key, value in data['id2label'].items()
+        }
+        if 'num_labels' not in data:
+            data['num_labels'] = len(data['id2label'])
+    return SimpleNamespace(**data)
 
 
 def _load_safetensors_weights(model_name, dtype):
@@ -337,10 +351,10 @@ class MlxBertForTokenClassification:
 def load_mlx_bert_token_classifier(
     model_name, *, dtype=None, quantization='none'
 ):
-    config = _load_config(model_name)
     exported = load_exported_weights(model_name)
     if exported is not None:
         weights, metadata = exported
+        config = _load_exported_config(model_name)
         exported_quantization = metadata['quantization']
         if quantization != 'none' and quantization != exported_quantization:
             raise ValueError(
@@ -355,6 +369,7 @@ def load_mlx_bert_token_classifier(
 
     import mlx.core as mx
 
+    config = _load_config(model_name)
     dtype = _dtype_from_name(mx, dtype)
     weights = _load_safetensors_weights(model_name, dtype)
     return MlxBertForTokenClassification(

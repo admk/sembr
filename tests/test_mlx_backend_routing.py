@@ -27,7 +27,8 @@ def test_init_routes_mlx_backend_to_mlx_loader(monkeypatch):
 
     expected_tokenizer = object()
     monkeypatch.setattr(
-        'sembr.cli._from_pretrained', lambda cls, name: expected_tokenizer)
+        'sembr.tokenizers.MlxTokenizer.from_pretrained',
+        lambda model_name: expected_tokenizer)
     monkeypatch.setattr(
         'sembr.mlx_backend.load_mlx_bert_token_classifier',
         fake_loader)
