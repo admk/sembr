@@ -7,8 +7,56 @@ from sembr.cli import cli_parser
 from sembr.config import (
     CONFIG_DEFAULTS,
     config_path,
+    default_config_path,
     load_config,
+    _flatten_config_table,
 )
+from sembr.platforms import install_command_for_extra
+
+
+def test_platform_macos_arm64_default_uses_mlx(monkeypatch):
+    monkeypatch.setattr(
+        'sembr.config.platform_override_keys',
+        lambda: ('darwin', 'macos', 'darwin-arm64', 'macos-arm64'))
+
+    config = load_config(path=default_config_path(), read_config_file=True)
+
+    assert config['backend'] == 'mlx'
+    assert config['model_name'] == 'admko/sembr2023-bert-small-nvfp4'
+    assert config['quantization'] == 'nvfp4'
+
+
+def test_platform_override_precedence(monkeypatch):
+    monkeypatch.setattr(
+        'sembr.config.platform_override_keys',
+        lambda: ('linux', 'linux-x86_64'))
+
+    config = _flatten_config_table({
+        'model': {
+            'backend': 'torch',
+            'name': 'base-model',
+        },
+        'platform': {
+            'linux': {
+                'model': {
+                    'backend': 'mlx',
+                    'name': 'linux-model',
+                },
+            },
+            'linux-x86_64': {
+                'model': {
+                    'name': 'linux-x86-model',
+                },
+            },
+        },
+    })
+
+    assert config['model.backend'] == 'mlx'
+    assert config['model.name'] == 'linux-x86-model'
+
+
+def test_install_command_formats_extra():
+    assert install_command_for_extra('mlx') == 'uv tool install "sembr[mlx]"'
 
 
 def test_config_path_uses_xdg_config_home(monkeypatch, tmp_path):

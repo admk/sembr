@@ -20,9 +20,7 @@ dependencies = [
     "mcp[cli]",
     "pydantic",
     "requests",
-    "torch; sys_platform == 'darwin' or sys_platform == 'linux'",
     "tqdm",
-    "transformers==5.9.0",
     "tree-sitter>=0.25.0",
     "tree-sitter-markdown>=0.3.2",
 ]
@@ -43,23 +41,33 @@ Issues = "https://github.com/admk/sembr/issues"
 
 [project.optional-dependencies]
 cuda = [
-    "accelerate; sys_platform == 'linux'",
+    "accelerate",
+    "bitsandbytes",
+    "torch",
+    "transformers==5.9.0",
+]
+mlx = [
+    "huggingface-hub",
+    "mlx",
+    "numpy",
+    "tokenizers",
+]
+cpu = [
+    "torch",
+    "transformers==5.9.0",
+]
+train = [
+    "accelerate",
+    "datasets",
+    "evaluate",
+    "numpy",
+    "torch",
+    "transformers==5.9.0",
 ]
 test = [
     "pytest",
-]
-quantization = [
-    "accelerate; sys_platform == 'linux'",
-    "bitsandbytes; sys_platform == 'linux' and platform_machine == 'x86_64'",
-]
-mlx = [
-    "mlx; sys_platform == 'darwin' and platform_machine == 'arm64'",
-]
-train = [
-    "accelerate; sys_platform == 'linux'",
-    "datasets; sys_platform == 'linux'",
-    "evaluate; sys_platform == 'linux'",
-    "numpy; sys_platform == 'linux'",
+    "torch",
+    "transformers==5.9.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -6,6 +6,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, ValidationError
 from pydantic import field_validator, model_validator
 
+from .platforms import platform_override_keys
+
 
 class SembrConfig(BaseModel):
     model_name: str = Field(alias='model.name')
@@ -200,17 +202,33 @@ def _load_toml(path):
         return tomllib.load(f)
 
 
+def _flatten_section(section, values):
+    config = {}
+    section = section.replace('-', '_')
+    if not isinstance(values, dict):
+        raise ValueError(f'Config section [{section}] must be a TOML table.')
+    for key, value in values.items():
+        config_key = f'{section}.{key}'.replace('-', '_')
+        config[config_key] = value
+    return config
+
+
 def _flatten_config_table(loaded):
     config = {}
     if not isinstance(loaded, dict):
         raise ValueError('Config file must contain a TOML table.')
     for section, values in loaded.items():
-        section = section.replace('-', '_')
-        if not isinstance(values, dict):
-            raise ValueError(f'Config section [{section}] must be a TOML table.')
-        for key, value in values.items():
-            config_key = f'{section}.{key}'.replace('-', '_')
-            config[config_key] = value
+        if section == 'platform':
+            continue
+        config.update(_flatten_section(section, values))
+    platform_tables = loaded.get('platform', {})
+    if platform_tables:
+        if not isinstance(platform_tables, dict):
+            raise ValueError('Config section [platform] must be a TOML table.')
+        for key in platform_override_keys():
+            values = platform_tables.get(key, {})
+            if values:
+                config.update(_flatten_config_table(values))
     return config
 
 

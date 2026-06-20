@@ -41,3 +41,12 @@ indent_type = "auto"
 host = "127.0.0.1"
 # API server port checked by clients and bound by --listen.
 port = 8384
+
+# Platform-specific overrides are applied after the base defaults.
+# Supported table shapes are [platform.<platform>.<section>],
+# where <section> is any normal SemBr config section.
+# Machine-specific platforms, such as macos-arm64, override generic OS tables.
+[platform.macos-arm64.model]
+name = "admko/sembr2023-bert-small-nvfp4"
+backend = "mlx"
+quantization = "nvfp4"

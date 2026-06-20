@@ -3,9 +3,14 @@ import sys
 import traceback
 
 from .config import SembrConfig, apply_config, load_config
+from .platforms import install_command_for_extra, recommended_backend_extra
 
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
+
+class MissingBackendError(RuntimeError):
+    pass
 
 
 def _safe_isatty(stream):
@@ -57,6 +62,26 @@ def _from_pretrained(model_class, model_name, **kwargs):
             model_name, local_files_only=True, **kwargs)
 
 
+def _backend_install_extra(backend):
+    if backend == 'mlx':
+        return 'mlx'
+    if backend == 'torch':
+        extra = recommended_backend_extra()
+        if extra in ['cuda', 'torch']:
+            return extra
+        return 'torch'
+    return backend
+
+
+def _raise_missing_backend(backend, error):
+    extra = _backend_install_extra(backend)
+    raise MissingBackendError(
+        f'Missing dependencies for model.backend="{backend}". '
+        'Install SemBr with an inference backend for this platform:\n'
+        f'  {install_command_for_extra(extra)}'
+    ) from error
+
+
 def init(
     model_name, bits=None, dtype=None, file_type=None, file_path=None,
     text=None, verbose=False, spaces=4, indent_type='space',
@@ -65,14 +90,20 @@ def init(
     from .processors import get_processor
 
     if backend == 'torch':
-        from transformers import AutoTokenizer
+        try:
+            from transformers import AutoTokenizer
+        except ModuleNotFoundError as e:
+            _raise_missing_backend(backend, e)
         tokenizer = _from_pretrained(AutoTokenizer, model_name)
         model = _init_torch_model(model_name, bits, dtype, quantization)
     elif backend == 'mlx':
-        from .mlx import MlxTokenizer, load_mlx_bert_token_classifier
-        tokenizer = MlxTokenizer.from_pretrained(model_name)
-        model = load_mlx_bert_token_classifier(
-            model_name, dtype=dtype, quantization=quantization)
+        try:
+            from .mlx import MlxTokenizer, load_mlx_bert_token_classifier
+            tokenizer = MlxTokenizer.from_pretrained(model_name)
+            model = load_mlx_bert_token_classifier(
+                model_name, dtype=dtype, quantization=quantization)
+        except ModuleNotFoundError as e:
+            _raise_missing_backend(backend, e)
     else:
         raise RuntimeError(f'Unsupported model backend: {backend!r}.')
     processor = get_processor(
@@ -82,8 +113,11 @@ def init(
 
 
 def _init_torch_model(model_name, bits=None, dtype=None, quantization='none'):
-    import torch
-    from transformers import AutoModelForTokenClassification
+    try:
+        import torch
+        from transformers import AutoModelForTokenClassification
+    except ModuleNotFoundError as e:
+        _raise_missing_backend('torch', e)
 
     if quantization != 'none':
         raise RuntimeError(
@@ -263,10 +297,14 @@ def main() -> int:
         mcp.run()
         return 0
     if args.listen:
-        tokenizer, model, _ = init(
-            args.model_name, args.bits, args.dtype, args.file_type, None, None,
-            args.verbose, config['spaces'], config['indent_type'],
-            args.backend, args.quantization)
+        try:
+            tokenizer, model, _ = init(
+                args.model_name, args.bits, args.dtype, args.file_type,
+                None, None, args.verbose, config['spaces'],
+                config['indent_type'], args.backend, args.quantization)
+        except MissingBackendError as e:
+            print(f'Backend error: {e}', file=sys.stderr)
+            return 2
         start_server(
             args.host, args.port, tokenizer, model, args.file_type, config)
         return 0
@@ -283,11 +321,15 @@ def main() -> int:
         result = rewrap_on_server(
             text, args.host, args.port, config, args.file_type)
     else:
-        tokenizer, model, processor = init(
-            args.model_name, args.bits, args.dtype,
-            args.file_type, args.input_file, text, args.verbose,
-            config['spaces'], config['indent_type'],
-            args.backend, args.quantization)
+        try:
+            tokenizer, model, processor = init(
+                args.model_name, args.bits, args.dtype,
+                args.file_type, args.input_file, text, args.verbose,
+                config['spaces'], config['indent_type'],
+                args.backend, args.quantization)
+        except MissingBackendError as e:
+            print(f'Backend error: {e}', file=sys.stderr)
+            return 2
         _, result = rewrap_text(text, tokenizer, model, config, processor)
     if args.output_file is None:
         print(result)
