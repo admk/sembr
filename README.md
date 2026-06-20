@@ -23,11 +23,10 @@ It supports multiple file types
 including LaTeX, Markdown, and plain text,
 with automatic file type detection.
 
-For coding agents,
-as an alternative,
-I also use [SemBr.Skill](https://github.com/admk/sembr.skill/)
-to perform semantic linebreaks
-and check consistency before and after edits.
+**[20 Jun 2026]** :rocket: It now supports MLX + NVFP4 on macOS
+which is incredibly fast:
+**it now uses only 8 seconds to process 100k words**
+on an old M2 MacBook Pro.
 
 ### Installation
 
@@ -227,9 +226,8 @@ The supported config keys are:
 
 On Apple Silicon Macs,
 SemBr can use the experimental MLX backend with NVFP4 quantization,
-which is ~2x faster than torch+MPS.
+which is **\~30x faster than torch+MPS**!
 Install the MLX extra:
-
 ```shell
 uv tool install "sembr[mlx]"
 ```
@@ -457,7 +455,12 @@ can be found on this [WandB][wandb] report:
 
 ## Performance
 
-Current inference speed on an M2 Macbook Pro
+We now ship an MLX NVFP4 variant
+that is about **26k words per second**,
+with a **much fast model load time (4 seconds)**
+and only about **130 MB** of memory usage!
+Inference speed for the old torch+MPS backend
+on an M2 Macbook Pro
 is about 850 words per second
 on `bert-small` with the default options,
 the memory usage is about 1.70 GB.
@@ -484,6 +487,7 @@ to save best models.
   - Typesetting languages support:
     - [x] ~~Markdown.~~
     - [ ] Typst.
+    - [ ] LaTeX.
   - Usability:
     - [ ] Inference queue.
     - [ ] Daemon with model unloading.
