@@ -63,6 +63,8 @@ def _from_pretrained(model_class, model_name, **kwargs):
 
 
 def _backend_install_extra(backend):
+    if backend == 'cuda':
+        return 'cuda'
     if backend == 'mlx':
         return 'mlx'
     if backend == 'torch':
@@ -89,7 +91,7 @@ def init(
 ):
     from .processors import get_processor
 
-    if backend == 'torch':
+    if backend in ['torch', 'cuda']:
         try:
             from transformers import AutoTokenizer
         except ModuleNotFoundError as e:

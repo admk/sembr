@@ -31,19 +31,31 @@ on an old M2 MacBook Pro.
 ### Installation
 
 SemBr is available as a [Python package on PyPI][pypi].
-For the default install:
+
+#### macOS on Apple Silicon with MLX
+
+On Apple Silicon Macs,
+SemBr can use the MLX backend with NVFP4 quantization,
+which is **\~30x faster than torch+MPS**!
+Install the MLX extra:
 ```shell
-pip install sembr
+uv tool install "sembr[mlx]"
 ```
-With [`uv`][uv]:
-```shell
-uv tool install sembr
-```
+
+#### Linux/Windows with CUDA support
 
 For CUDA on Linux,
 install the CUDA extra:
 ```shell
 uv tool install "sembr[cuda]"
+```
+
+#### CPU (Linux/Windows) or MPS (macOS) only
+
+Install with [`uv`][uv]:
+```shell
+uv tool install sembr[cpu]
+```
 ```
 
 #### From GitHub (Latest Development Version)
@@ -171,9 +183,9 @@ The supported config keys are:
 * `model.backend`:
   Inference backend to use.
   `torch` is the default.
-  `mlx` is experimental
-  and currently supports BERT token classification models
-  on Apple Silicon.
+  `cuda` uses the torch backend
+  and requires a CUDA-capable torch install.
+  Choose `mlx` on Apple Silicon.
 * `model.bits`:
   Quantization bits for model weights (`4` or `8`).
   Requires CUDA. Not supported on MPS.
@@ -221,36 +233,6 @@ The supported config keys are:
 * `listen.port`:
   The port for the SemBr API server.
   The default is `8384`.
-
-#### Apple Silicon / MLX
-
-On Apple Silicon Macs,
-SemBr can use the experimental MLX backend with NVFP4 quantization,
-which is **\~30x faster than torch+MPS**!
-Install the MLX extra:
-```shell
-uv tool install "sembr[mlx]"
-```
-
-Use the quantized NVFP4 model:
-
-```shell
-sembr \
-  -c model.backend=mlx \
-  -c model.name=admko/sembr2023-bert-small-nvfp4 \
-  -c model.quantization=nvfp4 \
-  ...
-```
-
-To make this permanent,
-add the following to `~/.config/sembr/config.toml`:
-
-```toml
-[model]
-backend = "mlx"
-name = "admko/sembr2023-bert-small-nvfp4"
-quantization = "nvfp4"
-```
 
 #### Balanced line breaks
 

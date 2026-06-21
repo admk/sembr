@@ -4,6 +4,7 @@
 # Hugging Face model name or local model path.
 name = "admko/sembr2023-bert-small"
 # Inference backend. "torch" supports CUDA/MPS/CPU through Transformers.
+# "cuda" uses the torch backend and requires a CUDA-capable torch install.
 # "mlx" is experimental and supports BERT token classification on Apple Silicon.
 backend = "torch"
 # CUDA quantization bits; valid values are 4 or 8, and MPS is not supported.

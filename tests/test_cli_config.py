@@ -1,7 +1,10 @@
 import os
 import sys
+import warnings
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+import pytest
 
 from sembr.cli import cli_parser
 from sembr.config import (
@@ -14,16 +17,144 @@ from sembr.config import (
 from sembr.platforms import install_command_for_extra
 
 
+@pytest.fixture(autouse=True)
+def disable_installed_backend_detection(monkeypatch):
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_cuda_extra',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_mlx_backend',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_torch_backend',
+        lambda: False)
+
+
 def test_platform_macos_arm64_default_uses_mlx(monkeypatch):
     monkeypatch.setattr(
         'sembr.config.platform_override_keys',
         lambda: ('darwin', 'macos', 'darwin-arm64', 'macos-arm64'))
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_cuda_extra',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_mlx_backend',
+        lambda: True)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_torch_backend',
+        lambda: False)
 
     config = load_config(path=default_config_path(), read_config_file=True)
 
     assert config['backend'] == 'mlx'
     assert config['model_name'] == 'admko/sembr2023-bert-small-nvfp4'
     assert config['quantization'] == 'nvfp4'
+
+
+def test_platform_macos_arm64_cuda_extra_uses_cuda_with_warning(monkeypatch):
+    monkeypatch.setattr(
+        'sembr.config.platform_override_keys',
+        lambda: ('darwin', 'macos', 'darwin-arm64', 'macos-arm64'))
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_cuda_extra',
+        lambda: True)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_mlx_backend',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_torch_backend',
+        lambda: True)
+
+    with pytest.warns(RuntimeWarning, match='MLX extra is recommended'):
+        config = load_config(
+            path=default_config_path(), read_config_file=True)
+
+    assert config['backend'] == 'cuda'
+    assert config['model_name'] == 'admko/sembr2023-bert-small'
+    assert config['quantization'] == 'none'
+
+
+def test_platform_macos_arm64_cpu_extra_uses_torch_with_warning(monkeypatch):
+    monkeypatch.setattr(
+        'sembr.config.platform_override_keys',
+        lambda: ('darwin', 'macos', 'darwin-arm64', 'macos-arm64'))
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_cuda_extra',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_mlx_backend',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_torch_backend',
+        lambda: True)
+
+    with pytest.warns(RuntimeWarning, match='model.backend="torch"'):
+        config = load_config(
+            path=default_config_path(), read_config_file=True)
+
+    assert config['backend'] == 'torch'
+    assert config['model_name'] == 'admko/sembr2023-bert-small'
+    assert config['quantization'] == 'none'
+
+
+def test_platform_macos_arm64_preserves_explicit_mlx_when_mlx_is_installed(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setattr(
+        'sembr.config.platform_override_keys',
+        lambda: ('darwin', 'macos', 'darwin-arm64', 'macos-arm64'))
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_cuda_extra',
+        lambda: True)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_mlx_backend',
+        lambda: True)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_torch_backend',
+        lambda: True)
+    path = tmp_path / 'config.toml'
+    path.write_text('[model]\nbackend = "mlx"', encoding='utf-8')
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        config = load_config(path=path)
+
+    assert config['backend'] == 'mlx'
+
+
+def test_platform_macos_arm64_explicit_mlx_falls_back_when_mlx_is_missing(
+    monkeypatch, tmp_path,
+):
+    monkeypatch.setattr(
+        'sembr.config.platform_override_keys',
+        lambda: ('darwin', 'macos', 'darwin-arm64', 'macos-arm64'))
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_cuda_extra',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_mlx_backend',
+        lambda: False)
+    monkeypatch.setattr(
+        'sembr.config.should_use_installed_torch_backend',
+        lambda: True)
+    path = tmp_path / 'config.toml'
+    path.write_text(
+        '\n'.join([
+            '[model]',
+            'name = "admko/sembr2023-bert-small-nvfp4"',
+            'backend = "mlx"',
+            'quantization = "nvfp4"',
+            'dtype = "bfloat16"',
+        ]),
+        encoding='utf-8')
+
+    with pytest.warns(RuntimeWarning, match='model.backend="torch"'):
+        config = load_config(path=path)
+
+    assert config['backend'] == 'torch'
+    assert config['model_name'] == 'admko/sembr2023-bert-small'
+    assert config['quantization'] == 'none'
+    assert config['dtype'] == 'bfloat16'
 
 
 def test_platform_override_precedence(monkeypatch):

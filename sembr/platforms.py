@@ -1,6 +1,8 @@
 import platform
 import shutil
 import sys
+import warnings
+from importlib.metadata import PackageNotFoundError, version
 
 
 def normalized_os():
@@ -35,6 +37,53 @@ def platform_override_keys():
 
 def has_cuda_device_hint():
     return shutil.which('nvidia-smi') is not None
+
+
+def has_cuda_extra_hint():
+    return has_installed_package('bitsandbytes')
+
+
+def has_installed_package(package):
+    try:
+        version(package)
+    except PackageNotFoundError:
+        return False
+    return True
+
+
+def has_torch_backend_hint():
+    return (
+        has_installed_package('torch')
+        and has_installed_package('transformers'))
+
+
+def has_mlx_backend_hint():
+    return has_installed_package('mlx')
+
+
+def is_apple_silicon_macos():
+    return normalized_os() == 'macos' and normalized_machine() == 'arm64'
+
+
+def should_use_installed_mlx_backend():
+    return is_apple_silicon_macos() and has_mlx_backend_hint()
+
+
+def should_use_installed_torch_backend():
+    return is_apple_silicon_macos() and has_torch_backend_hint()
+
+
+def should_use_installed_cuda_extra():
+    return is_apple_silicon_macos() and has_cuda_extra_hint()
+
+
+def warn_apple_silicon_torch_backend(backend):
+    warnings.warn(
+        'SemBr detected the torch backend on Apple Silicon macOS and will use '
+        f'model.backend="{backend}". The MLX extra is recommended on Apple '
+        f'Silicon: {install_command_for_extra("mlx")}',
+        RuntimeWarning,
+        stacklevel=2)
 
 
 def recommended_backend_extra():

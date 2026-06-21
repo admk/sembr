@@ -6,12 +6,18 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, PositiveInt, ValidationError
 from pydantic import field_validator, model_validator
 
-from .platforms import platform_override_keys
+from .platforms import (
+    platform_override_keys,
+    should_use_installed_cuda_extra,
+    should_use_installed_mlx_backend,
+    should_use_installed_torch_backend,
+    warn_apple_silicon_torch_backend,
+)
 
 
 class SembrConfig(BaseModel):
     model_name: str = Field(alias='model.name')
-    backend: Literal['torch', 'mlx'] = Field(alias='model.backend')
+    backend: Literal['torch', 'mlx', 'cuda'] = Field(alias='model.backend')
     bits: int | None = Field(default=None, alias='model.bits')
     dtype: str | None = Field(default=None, alias='model.dtype')
     quantization: Literal['none', 'affine', 'mxfp4', 'mxfp8', 'nvfp4'] = Field(
@@ -193,6 +199,10 @@ def default_config_path():
     return Path(__file__).with_name('default.toml')
 
 
+def _is_default_config_path(path):
+    return Path(path).resolve() == default_config_path().resolve()
+
+
 def _load_toml(path):
     try:
         import tomllib
@@ -256,18 +266,50 @@ def _config_data_from_attrs(config):
     }
 
 
+def _apply_installed_extra_backend(data, explicit_keys):
+    if data.get('model.backend') != 'mlx':
+        return data
+    if should_use_installed_mlx_backend():
+        return data
+    if should_use_installed_cuda_extra():
+        backend = 'cuda'
+    elif should_use_installed_torch_backend():
+        backend = 'torch'
+    else:
+        return data
+    data = dict(data)
+    data['model.backend'] = backend
+    if (
+        'model.name' not in explicit_keys
+        or data.get('model.name') == 'admko/sembr2023-bert-small-nvfp4'
+    ):
+        data['model.name'] = 'admko/sembr2023-bert-small'
+    if data.get('model.quantization') != 'none':
+        data['model.quantization'] = 'none'
+    warn_apple_silicon_torch_backend(backend)
+    return data
+
+
 def load_config(
     overrides=None, path=None, read_config_file=True, base_config=None
 ):
     data = dict(CONFIG_FILE_DEFAULTS)
+    explicit_keys = set()
     if read_config_file:
         path = Path(path) if path is not None else config_path()
         if path.exists():
-            data.update(_flatten_config_table(_load_toml(path)))
-    data.update(_config_data_from_attrs(base_config or {}))
+            file_config = _flatten_config_table(_load_toml(path))
+            if not _is_default_config_path(path):
+                explicit_keys.update(file_config)
+            data.update(file_config)
+    base_data = _config_data_from_attrs(base_config or {})
+    explicit_keys.update(base_data)
+    data.update(base_data)
     for override in overrides or []:
         key, value = _parse_config_override(override)
+        explicit_keys.add(key)
         data[key] = value
+    data = _apply_installed_extra_backend(data, explicit_keys)
     return _validate_config(data).model_dump()
 
 
