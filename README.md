@@ -25,7 +25,7 @@ with automatic file type detection.
 
 **[20 Jun 2026]** :rocket: It now supports MLX + NVFP4 on macOS
 which is incredibly fast:
-**it now uses only 8 seconds to process 100k words**
+**it now uses only <6 seconds to process 100k words**
 on an old M2 MacBook Pro.
 
 ### Installation
