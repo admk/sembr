@@ -56,7 +56,6 @@ Install with [`uv`][uv]:
 ```shell
 uv tool install sembr[cpu]
 ```
-```
 
 #### From GitHub (Latest Development Version)
 
