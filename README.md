@@ -1,7 +1,7 @@
 # ⚡️ Semantic Line Breaker (SemBr)
 
 [![GitHub](https://img.shields.io/github/license/admk/sembr)](LICENSE)
-[![python](https://img.shields.io/badge/Python-3.10-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![python](https://img.shields.io/badge/Python-3.11--3.14-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![pytorch](https://img.shields.io/badge/PyTorch-2.1.0-EE4C2C.svg?style=flat&logo=pytorch)](https://pytorch.org)
 [![PyPI](https://badge.fury.io/py/sembr.svg)](https://pypi.org/project/sembr)
 
