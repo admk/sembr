@@ -473,7 +473,7 @@ to save best models.
     - [ ] Inference queue.
     - [ ] Daemon with model unloading.
   - Editor integration:
-    - [x] ~~NeoVim plugin.~~
+    - [ ] NeoVim plugin.
     - [x] ~~VSCode extension.~~
     - [x] MCP server.
   - [x] ~~Use the [Hugging Face API][hfapi] for inference.~~
