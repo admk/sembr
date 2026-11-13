@@ -55,11 +55,12 @@ def cli_parser():
 
 
 def _from_pretrained(model_class, model_name, **kwargs):
+    # Prefer the local cache, so the Hub is only contacted for a download.
     try:
-        return model_class.from_pretrained(model_name, **kwargs)
-    except Exception:
         return model_class.from_pretrained(
             model_name, local_files_only=True, **kwargs)
+    except Exception:
+        return model_class.from_pretrained(model_name, **kwargs)
 
 
 def _backend_install_extra(backend):

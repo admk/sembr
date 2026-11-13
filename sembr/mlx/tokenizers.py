@@ -3,6 +3,8 @@ from pathlib import Path
 
 import numpy as np
 
+from .hub import hub_file
+
 
 @dataclass
 class Encoding:
@@ -73,5 +75,4 @@ def _resolve_tokenizer_file(model_name):
             return candidate
         raise FileNotFoundError(f'Could not find tokenizer.json in {path}.')
 
-    from huggingface_hub import hf_hub_download
-    return Path(hf_hub_download(model_name, 'tokenizer.json'))
+    return hub_file(model_name, 'tokenizer.json')

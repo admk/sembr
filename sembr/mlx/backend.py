@@ -5,6 +5,8 @@ from pathlib import Path
 
 from huggingface_hub.errors import EntryNotFoundError, LocalEntryNotFoundError
 
+from .hub import hub_file
+
 EXPORT_FORMAT = 'sembr-mlx-bert-token-classifier'
 EXPORT_VERSION = 1
 EXPORT_METADATA_FILE = 'sembr_mlx.json'
@@ -38,17 +40,15 @@ def _resolve_model_file(model_name, filename, *, local_files_only=False):
             return candidate
         raise FileNotFoundError(f'Could not find {filename} in {path}.')
 
-    from huggingface_hub import hf_hub_download
-    return Path(hf_hub_download(
-        model_name, filename, local_files_only=local_files_only))
+    return hub_file(model_name, filename, local_files_only=local_files_only)
 
 
 def _load_config(model_name):
     from transformers import AutoConfig
     try:
-        return AutoConfig.from_pretrained(model_name)
-    except Exception:
         return AutoConfig.from_pretrained(model_name, local_files_only=True)
+    except Exception:
+        return AutoConfig.from_pretrained(model_name)
 
 
 def _load_exported_config(model_name):
