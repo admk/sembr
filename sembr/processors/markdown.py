@@ -40,6 +40,13 @@ class MarkdownProcessor(BaseProcessor):
         """Find only inline text nodes that need wrapping."""
         tree = self.parser.parse(bytes(text, "utf8"))
         root_node = tree.root_node
+        # tree-sitter reports byte offsets, while text is indexed by character.
+        self._char_offsets = {}
+        byte_offset = 0
+        for char_offset, char in enumerate(text):
+            self._char_offsets[byte_offset] = char_offset
+            byte_offset += len(char.encode("utf8"))
+        self._char_offsets[byte_offset] = len(text)
         text_regions = []
         self._find_inline_text_nodes(root_node, text, text_regions)
         return text_regions
@@ -67,7 +74,9 @@ class MarkdownProcessor(BaseProcessor):
             )
         # If this is an inline text node, extract it for processing
         if node.type == "inline":
-            text_content = text[node.start_byte : node.end_byte]
+            start = self._char_offsets[node.start_byte]
+            end = self._char_offsets[node.end_byte]
+            text_content = text[start:end]
             if text_content.strip():  # Only process non-empty content
                 # Extract continuation formatting for this inline text
                 continuation_info = self._get_continuation_format(
@@ -76,8 +85,8 @@ class MarkdownProcessor(BaseProcessor):
                 regions.append(
                     {
                         "text": text_content,
-                        "start_byte": node.start_byte,
-                        "end_byte": node.end_byte,
+                        "start_byte": start,
+                        "end_byte": end,
                         "node_type": "inline",
                         "continuation_prefix": continuation_info["prefix"],
                         "continuation_indent": continuation_info["indent"],
@@ -99,7 +108,10 @@ class MarkdownProcessor(BaseProcessor):
         # Accumulate indentation from all list contexts (for nested lists)
         for context in context_stack:
             node = context["node"]
-            node_content = text[node.start_byte : node.end_byte]
+            node_content = text[
+                self._char_offsets[node.start_byte]:
+                self._char_offsets[node.end_byte]
+            ]
             first_line = node_content.split("\n")[0]
             if context["type"] == "list_item":
                 # Extract list marker and calculate continuation indent
